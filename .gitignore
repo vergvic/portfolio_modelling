@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# App database (lives in %APPDATA%, but exclude any local copies)
+*.db
+*.db-shm
+*.db-wal
+
+# PyInstaller output
+dist/
+
+# Source material (not part of the app)
+context files/
+
+# Test script
+test_compute.py
+
+# IDE
+.cursor/
+.vscode/
