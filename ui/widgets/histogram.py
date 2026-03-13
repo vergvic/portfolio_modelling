@@ -15,6 +15,12 @@ from ui.styles import (
 )
 
 
+class _Canvas(FigureCanvas):
+    """FigureCanvas that passes wheel events to the parent scroll area."""
+    def wheelEvent(self, event):
+        event.ignore()
+
+
 class HistogramWidget(QWidget):
     """
     Histogram of return frequencies with a right-axis cumulative probability line.
@@ -27,7 +33,7 @@ class HistogramWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
 
         self._figure = Figure(figsize=(6, 3), facecolor=BG_PANEL, tight_layout=True)
-        self._canvas = FigureCanvas(self._figure)
+        self._canvas = _Canvas(self._figure)
         self._canvas.setStyleSheet(f"background: {BG_PANEL};")
 
         self._placeholder = QLabel("Select a ticker to view distribution")

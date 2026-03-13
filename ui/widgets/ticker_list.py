@@ -9,6 +9,7 @@ Features:
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QListWidget, QListWidgetItem, QMenu, QAbstractItemView,
+    QAbstractScrollArea,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QKeySequence, QAction
@@ -65,6 +66,12 @@ class TickerListWidget(QWidget):
         self._list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._list.customContextMenuRequested.connect(self._show_context_menu)
         self._list.installEventFilter(self)
+        self._list.setSizeAdjustPolicy(
+            QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents
+        )
+        self._list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._list.setMinimumHeight(80)
         layout.addWidget(self._list)
 
     # ------------------------------------------------------------------
@@ -92,6 +99,10 @@ class TickerListWidget(QWidget):
             item.setData(Qt.ItemDataRole.UserRole, pos["ticker"])
             item.setFont(self._monospace_font())
             self._list.addItem(item)
+        # Expand to show every row — outer scroll area handles overflow
+        n = self._list.count()
+        row_h = self._list.sizeHintForRow(0) if n > 0 else 28
+        self._list.setMinimumHeight(max(80, n * row_h + 4))
 
     def _current_ticker(self) -> str | None:
         item = self._list.currentItem()

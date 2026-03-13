@@ -13,7 +13,7 @@ import pandas as pd
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
     QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
-    QSizePolicy,
+    QSizePolicy, QScrollArea, QAbstractScrollArea, QFrame,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
@@ -22,6 +22,12 @@ from ui.widgets.metric_card import MetricCard
 from ui.styles import (
     TEXT_SECONDARY, TEXT_PRIMARY, GREEN, RED, ORANGE, NEUTRAL, BG_PANEL
 )
+
+
+class _PassThroughTable(QTableWidget):
+    """QTableWidget that passes wheel events up to the parent scroll area."""
+    def wheelEvent(self, event):
+        event.ignore()
 
 
 def _corr_color(v: float) -> str:
@@ -34,6 +40,14 @@ def _corr_color(v: float) -> str:
     if av <= 0.5:
         return ORANGE
     return RED
+
+
+def _fit_table(t: QTableWidget) -> None:
+    """Set minimum height so every row is visible — no internal scrolling."""
+    h = t.horizontalHeader().height() + 2
+    for i in range(t.rowCount()):
+        h += t.rowHeight(i)
+    t.setMinimumHeight(h)
 
 
 class TabTicker(QWidget):
@@ -55,7 +69,17 @@ class TabTicker(QWidget):
 
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
-        root = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        content = QWidget()
+        root = QVBoxLayout(content)
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(16)
 
@@ -87,7 +111,7 @@ class TabTicker(QWidget):
         corr_layout = QVBoxLayout(corr_box)
         corr_layout.setContentsMargins(8, 8, 8, 8)
 
-        self._corr_table = QTableWidget(0, 2)
+        self._corr_table = _PassThroughTable(0, 2)
         self._corr_table.setHorizontalHeaderLabels(["Pair", "Correlation"])
         self._corr_table.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.ResizeMode.Stretch
@@ -99,6 +123,11 @@ class TabTicker(QWidget):
         self._corr_table.setAlternatingRowColors(True)
         self._corr_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._corr_table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        self._corr_table.setSizeAdjustPolicy(
+            QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents
+        )
+        self._corr_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._corr_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         corr_layout.addWidget(self._corr_table)
         root.addWidget(corr_box)
 
@@ -107,7 +136,7 @@ class TabTicker(QWidget):
         impact_layout = QVBoxLayout(impact_box)
         impact_layout.setContentsMargins(8, 8, 8, 8)
 
-        self._impact_table = QTableWidget(3, 3)
+        self._impact_table = _PassThroughTable(3, 3)
         self._impact_table.setHorizontalHeaderLabels(["Metric", "With", "Without"])
         self._impact_table.setVerticalHeaderLabels(["Port Beta", "Port Vol (%)", "Avg Corr"])
         self._impact_table.horizontalHeader().setSectionResizeMode(
@@ -119,17 +148,26 @@ class TabTicker(QWidget):
         self._impact_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._impact_table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
         self._impact_table.setAlternatingRowColors(True)
+        self._impact_table.setSizeAdjustPolicy(
+            QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents
+        )
+        self._impact_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._impact_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         # Pre-fill metric names
         for i, label in enumerate(["Portfolio Beta", "Portfolio Vol (%)", "Avg Corr"]):
             item = QTableWidgetItem(label)
             item.setForeground(QColor(TEXT_SECONDARY))
             self._impact_table.setItem(i, 0, item)
+        _fit_table(self._impact_table)
 
         impact_layout.addWidget(self._impact_table)
         root.addWidget(impact_box)
 
         root.addStretch()
+
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
 
     # ------------------------------------------------------------------
     def refresh_display(
@@ -201,6 +239,7 @@ class TabTicker(QWidget):
             val_item.setForeground(QColor(_corr_color(val)))
             self._corr_table.setItem(row, 0, pair_item)
             self._corr_table.setItem(row, 1, val_item)
+        _fit_table(self._corr_table)
 
     def _fill_impact_table(self, ticker: str, with_m: dict, without_m: dict) -> None:
         self._impact_table.setHorizontalHeaderLabels(
@@ -234,6 +273,7 @@ class TabTicker(QWidget):
             without_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             without_item.setForeground(QColor(TEXT_SECONDARY))
             self._impact_table.setItem(i, 2, without_item)
+        _fit_table(self._impact_table)
 
     def _clear_impact_table(self) -> None:
         for i in range(3):

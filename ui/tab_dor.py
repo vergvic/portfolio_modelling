@@ -12,7 +12,7 @@ Uses monthly data (full history) for both C-C and H-L return series.
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
     QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
-    QScrollArea, QFrame, QSizePolicy,
+    QScrollArea, QFrame, QSizePolicy, QAbstractScrollArea,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
@@ -51,6 +51,7 @@ class TabDoR(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         content = QWidget()
         content_layout = QVBoxLayout(content)
@@ -116,7 +117,7 @@ class _DorPanel(QGroupBox):
 
         # Histogram
         self._histogram = HistogramWidget()
-        self._histogram.setMinimumHeight(220)
+        self._histogram.setMinimumHeight(280)
         root.addWidget(self._histogram)
 
         # Stats row
@@ -186,6 +187,7 @@ class _DorPanel(QGroupBox):
             val_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             val_item.setForeground(QColor(TEXT_PRIMARY))
             self._stats_table.setItem(row, 1, val_item)
+        _fit_table(self._stats_table)
 
         # Pos/Neg/Zero table
         self._pnz_table.setRowCount(3)
@@ -211,6 +213,7 @@ class _DorPanel(QGroupBox):
                 color = GREEN if bucket == "positive" else (RED if bucket == "negative" else TEXT_SECONDARY)
                 item.setForeground(QColor(color))
                 self._pnz_table.setItem(row, col, item)
+        _fit_table(self._pnz_table)
 
         # SD bounds table
         self._sd_table.setRowCount(len(bounds))
@@ -221,6 +224,7 @@ class _DorPanel(QGroupBox):
             self._sd_table.setItem(row, 0, _plain(f"{sig}σ  ({bound['lower']:.3f} – {bound['upper']:.3f})"))
             self._sd_table.setItem(row, 1, _pct_item(act))
             self._sd_table.setItem(row, 2, _pct_item(nrm, secondary=True))
+        _fit_table(self._sd_table)
 
     def clear(self) -> None:
         self._histogram.clear()
@@ -233,14 +237,31 @@ class _DorPanel(QGroupBox):
 # Helpers
 # ---------------------------------------------------------------------------
 
+class _PassThroughTable(QTableWidget):
+    """QTableWidget that passes wheel events up to the parent scroll area."""
+    def wheelEvent(self, event):
+        event.ignore()
+
+
+def _fit_table(t: QTableWidget) -> None:
+    """Set minimum height so every row is visible — no internal scrolling."""
+    h = t.horizontalHeader().height() + 2
+    for i in range(t.rowCount()):
+        h += t.rowHeight(i)
+    t.setMinimumHeight(h)
+
+
 def _make_two_col_table(headers: list[str], cols: int = 2) -> QTableWidget:
-    t = QTableWidget(0, cols)
+    t = _PassThroughTable(0, cols)
     t.setHorizontalHeaderLabels(headers)
     t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
     t.verticalHeader().hide()
     t.setAlternatingRowColors(True)
     t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
     t.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+    t.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
+    t.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    t.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
     return t
 
 

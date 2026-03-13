@@ -1,19 +1,11 @@
 """
 Tab 1 — Portfolio Overview
 
-Layout (top → bottom):
+Layout (top → bottom, inside a single outer QScrollArea):
   1. Row of 3 MetricCards: Portfolio Vol, Portfolio Beta, Avg Pairwise Correlation
   2. Two TickerListWidgets side-by-side: Longs | Shorts (each with Add button)
   3. Two HeatmapWidgets side-by-side: Correlation Matrix | Var-Covar Matrix
   4. Refresh Data button (bottom-right)
-
-Signals received from MainWindow:
-  - refresh_display(portfolio, metrics)
-
-Signals emitted to MainWindow:
-  - add_position_requested(side)
-  - remove_position_requested(ticker)
-  - refresh_data_requested()
 """
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QFrame,
@@ -39,7 +31,18 @@ class TabPortfolio(QWidget):
 
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
-        root = QVBoxLayout(self)
+        # Outer layout holds only the scroll area — no margins here
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        content = QWidget()
+        root = QVBoxLayout(content)
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(16)
 
@@ -81,8 +84,8 @@ class TabPortfolio(QWidget):
         self._covar_heatmap = HeatmapWidget("Var-Covar Matrix (annualised)")
 
         for hw in (self._corr_heatmap, self._covar_heatmap):
-            hw.setMinimumHeight(300)
-            hw.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+            hw.setMinimumHeight(460)
+            hw.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             heat_row.addWidget(hw)
 
         root.addLayout(heat_row)
@@ -96,19 +99,16 @@ class TabPortfolio(QWidget):
         btn_row.addWidget(refresh_btn)
         root.addLayout(btn_row)
 
+        root.addStretch()
+
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
+
     # ------------------------------------------------------------------
     def refresh_display(self, portfolio: list[dict], metrics: dict) -> None:
-        """
-        Update all widgets from the current portfolio state and computed metrics.
-
-        portfolio: list of {ticker, side, dollar_amount}
-        metrics  : output of compute_all_metrics()
-        """
-        # Ticker lists
         self._longs_list.set_positions(portfolio)
         self._shorts_list.set_positions(portfolio)
 
-        # Metric cards
         vol  = metrics.get("portfolio_vol")
         beta = metrics.get("portfolio_beta")
         corr = metrics.get("avg_correlation")
@@ -117,9 +117,8 @@ class TabPortfolio(QWidget):
         self._beta_card.set_value(beta, target_range=BETA_TARGET, scale=1.0)
         self._corr_card.set_value(corr, target_range=CORR_TARGET, scale=1.0)
 
-        # Heatmaps
-        corr_matrix  = metrics.get("corr_matrix")
-        cov_matrix   = metrics.get("cov_matrix")
+        corr_matrix = metrics.get("corr_matrix")
+        cov_matrix  = metrics.get("cov_matrix")
 
         if corr_matrix is not None and not corr_matrix.empty:
             self._corr_heatmap.set_matrix(corr_matrix, fmt=".2f")

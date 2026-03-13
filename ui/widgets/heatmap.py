@@ -14,6 +14,12 @@ from PySide6.QtCore import Qt
 from ui.styles import BG_MAIN, BG_PANEL, TEXT_PRIMARY, TEXT_SECONDARY, BORDER
 
 
+class _Canvas(FigureCanvas):
+    """FigureCanvas that passes wheel events to the parent scroll area."""
+    def wheelEvent(self, event):
+        event.ignore()
+
+
 class HeatmapWidget(QWidget):
     """Matplotlib heatmap embedded in a Qt widget."""
 
@@ -26,7 +32,7 @@ class HeatmapWidget(QWidget):
         layout.setSpacing(0)
 
         self._figure = Figure(facecolor=BG_PANEL, tight_layout=True)
-        self._canvas = FigureCanvas(self._figure)
+        self._canvas = _Canvas(self._figure)
         self._canvas.setStyleSheet(f"background: {BG_PANEL};")
 
         self._placeholder = QLabel("Add 2+ tickers to display matrix")
