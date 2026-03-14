@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QKeySequence, QAction
 
-from ui.styles import TEXT_SECONDARY, TEXT_PRIMARY, ACCENT, BG_PANEL, BORDER
+import ui.styles as _s
 
 
 class TickerListWidget(QWidget):
@@ -37,7 +37,7 @@ class TickerListWidget(QWidget):
         """
         super().__init__(parent)
         self._side = side
-        self._positions: list[dict] = []   # [{ticker, side, dollar_amount}]
+        self._positions: list[dict] = []
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -46,15 +46,15 @@ class TickerListWidget(QWidget):
         # Header row
         hdr = QHBoxLayout()
         label_text = "LONGS" if side == "long" else "SHORTS"
-        hdr_label = QLabel(label_text)
-        hdr_label.setStyleSheet(
-            f"color: {TEXT_SECONDARY}; font-size: 11px; font-weight: bold; letter-spacing: 1px;"
+        self._hdr_label = QLabel(label_text)
+        self._hdr_label.setStyleSheet(
+            f"color: {_s.TEXT_SECONDARY}; font-size: 11px; font-weight: bold; letter-spacing: 1px;"
         )
         add_btn = QPushButton(f"+ Add {side.title()}")
         add_btn.setObjectName("AddButton")
         add_btn.clicked.connect(lambda: self.add_requested.emit(self._side))
 
-        hdr.addWidget(hdr_label)
+        hdr.addWidget(self._hdr_label)
         hdr.addStretch()
         hdr.addWidget(add_btn)
         layout.addLayout(hdr)
@@ -91,6 +91,9 @@ class TickerListWidget(QWidget):
 
     # ------------------------------------------------------------------
     def _rebuild_list(self) -> None:
+        self._hdr_label.setStyleSheet(
+            f"color: {_s.TEXT_SECONDARY}; font-size: 11px; font-weight: bold; letter-spacing: 1px;"
+        )
         self._list.clear()
         for pos in self._positions:
             item = QListWidgetItem(
@@ -100,7 +103,7 @@ class TickerListWidget(QWidget):
             item.setFont(self._monospace_font())
             self._list.addItem(item)
         # Expand to show every row — outer scroll area handles overflow
-        n = self._list.count()
+        n     = self._list.count()
         row_h = self._list.sizeHintForRow(0) if n > 0 else 28
         self._list.setMinimumHeight(max(80, n * row_h + 4))
 
@@ -129,7 +132,6 @@ class TickerListWidget(QWidget):
     # ------------------------------------------------------------------
     def eventFilter(self, obj, event) -> bool:
         from PySide6.QtCore import QEvent
-        from PySide6.QtGui import QKeyEvent
         if obj is self._list and event.type() == QEvent.Type.KeyPress:
             if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
                 self._remove_selected()

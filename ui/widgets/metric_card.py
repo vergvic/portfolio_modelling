@@ -9,7 +9,7 @@ Usage:
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel
 from PySide6.QtCore import Qt
 
-from ui.styles import BG_PANEL, TEXT_SECONDARY, TEXT_PRIMARY, NEUTRAL, traffic_light
+import ui.styles as _s
 
 
 class MetricCard(QFrame):
@@ -24,9 +24,8 @@ class MetricCard(QFrame):
     ):
         super().__init__(parent)
         self.setObjectName("MetricCard")
-        self._unit = unit
-        self._fmt = fmt
-        self._target_range: tuple[float, float] | None = None
+        self._unit  = unit
+        self._fmt   = fmt
 
         self.setMinimumWidth(180)
         self.setMinimumHeight(90)
@@ -37,12 +36,14 @@ class MetricCard(QFrame):
 
         self._label = QLabel(label)
         self._label.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        self._label.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 11px; font-weight: bold;")
+        self._label.setStyleSheet(
+            f"color: {_s.TEXT_SECONDARY}; font-size: 11px; font-weight: bold;"
+        )
 
         self._value_label = QLabel("—")
         self._value_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self._value_label.setStyleSheet(
-            f"color: {NEUTRAL}; font-size: 28px; font-weight: bold;"
+            f"color: {_s.NEUTRAL}; font-size: 28px; font-weight: bold;"
         )
 
         layout.addWidget(self._label)
@@ -59,28 +60,31 @@ class MetricCard(QFrame):
         """
         Update the displayed number.
 
-        value       : raw float (e.g. 0.184 for 18.4%)
-        target_range: (low, high) in the same scale as *value*
-        scale       : multiply before display (e.g. 100 to convert 0.184 → 18.4)
+        value        : raw float (e.g. 0.184 for 18.4%)
+        target_range : (low, high) in the same scale as *value*
+        scale        : multiply before display (e.g. 100 to convert 0.184 → 18.4)
         """
+        # Refresh label colours to pick up current theme
+        self._label.setStyleSheet(
+            f"color: {_s.TEXT_SECONDARY}; font-size: 11px; font-weight: bold;"
+        )
+
         if value is None:
             self._value_label.setText("—")
             self._value_label.setStyleSheet(
-                f"color: {NEUTRAL}; font-size: 28px; font-weight: bold;"
+                f"color: {_s.NEUTRAL}; font-size: 28px; font-weight: bold;"
             )
             return
 
         display = value * scale
-        text = f"{display:{self._fmt}}{self._unit}"
+        text    = f"{display:{self._fmt}}{self._unit}"
         self._value_label.setText(text)
 
-        colour = NEUTRAL
         if target_range is not None:
-            # Scale target range if needed
             lo, hi = target_range[0] * scale, target_range[1] * scale
-            colour = traffic_light(display, (lo, hi))
+            colour = _s.traffic_light(display, (lo, hi))
         else:
-            colour = TEXT_PRIMARY
+            colour = _s.TEXT_PRIMARY
 
         self._value_label.setStyleSheet(
             f"color: {colour}; font-size: 28px; font-weight: bold;"

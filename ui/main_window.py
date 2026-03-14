@@ -15,7 +15,7 @@ from typing import Any
 import pandas as pd
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QTabWidget, QVBoxLayout,
-    QStatusBar, QLabel, QApplication,
+    QStatusBar, QLabel, QApplication, QPushButton,
 )
 from PySide6.QtCore import Qt, QThread, Signal
 
@@ -30,7 +30,8 @@ from ui.tab_portfolio import TabPortfolio
 from ui.tab_ticker    import TabTicker
 from ui.tab_dor       import TabDoR
 from ui.widgets.ticker_input import TickerInputDialog
-from ui.styles import STYLESHEET, ORANGE, TEXT_SECONDARY  # noqa: F401
+import ui.styles as styles
+from ui.styles import ORANGE, TEXT_SECONDARY  # noqa: F401  (re-exported aliases)
 from config import APP_NAME, WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT, MARKET_PROXY
 
 log = logging.getLogger(__name__)
@@ -98,7 +99,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(APP_NAME)
         self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
-        self.setStyleSheet(STYLESHEET)
+        self.setStyleSheet(styles.STYLESHEET)
 
         # In-memory state
         self._portfolio: list[dict] = []
@@ -136,6 +137,13 @@ class MainWindow(QMainWindow):
         self._tabs.addTab(self._tab_portfolio, "Portfolio")
         self._tabs.addTab(self._tab_ticker,    "Ticker vs Rest")
         self._tabs.addTab(self._tab_dor,       "Distribution of Returns")
+
+        # Theme toggle button — placed in the top-right corner of the tab bar
+        self._theme_btn = QPushButton(f"THEME: {styles.current_theme_name()}")
+        self._theme_btn.setObjectName("ThemeButton")
+        self._theme_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._theme_btn.clicked.connect(self._on_theme_cycle)
+        self._tabs.setCornerWidget(self._theme_btn, Qt.Corner.TopRightCorner)
 
         layout.addWidget(self._tabs)
 
@@ -358,6 +366,18 @@ class MainWindow(QMainWindow):
             self._spy_weekly,
         )
         self._tab_dor.refresh_display(self._portfolio, self._dor_data)
+
+    # ------------------------------------------------------------------
+    # Theme cycling
+    # ------------------------------------------------------------------
+
+    def _on_theme_cycle(self) -> None:
+        next_name = styles.next_theme_name()
+        new_ss    = styles.apply_theme(next_name)
+        QApplication.instance().setStyleSheet(new_ss)
+        self._theme_btn.setText(f"THEME: {next_name}")
+        # Re-render all tabs so matplotlib charts and per-cell colours update
+        self._update_all_tabs()
 
     # ------------------------------------------------------------------
     # Status bar

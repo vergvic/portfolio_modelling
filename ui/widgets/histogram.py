@@ -10,9 +10,7 @@ from matplotlib.figure import Figure
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
 from PySide6.QtCore import Qt
 
-from ui.styles import (
-    BG_PANEL, TEXT_PRIMARY, TEXT_SECONDARY, BORDER, ACCENT, GREEN, NEUTRAL
-)
+import ui.styles as _s
 
 
 class _Canvas(FigureCanvas):
@@ -32,15 +30,15 @@ class HistogramWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        self._figure = Figure(figsize=(6, 3), facecolor=BG_PANEL, tight_layout=True)
+        self._figure = Figure(figsize=(6, 3), facecolor=_s.BG_PANEL, tight_layout=True)
         self._canvas = _Canvas(self._figure)
-        self._canvas.setStyleSheet(f"background: {BG_PANEL};")
+        self._canvas.setStyleSheet(f"background: {_s.BG_PANEL};")
 
         self._placeholder = QLabel("Select a ticker to view distribution")
         self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._placeholder.setStyleSheet(
-            f"color: {TEXT_SECONDARY}; font-size: 12px; background: {BG_PANEL};"
-            f" border: 1px solid {BORDER}; border-radius: 4px; padding: 20px;"
+            f"color: {_s.TEXT_SECONDARY}; font-size: 12px; background: {_s.BG_PANEL};"
+            f" border: 1px solid {_s.BORDER}; padding: 20px;"
         )
 
         layout.addWidget(self._placeholder)
@@ -65,46 +63,43 @@ class HistogramWidget(QWidget):
         ax = self._figure.add_subplot(111)
         ax2 = ax.twinx()  # right axis for cumulative %
 
-        # Bar positions: mid-point of each bin
         midpoints = (freq_df["lower"] + freq_df["upper"]) / 2
-        widths = freq_df["upper"] - freq_df["lower"]
-        probs = freq_df["probability"].values
+        widths     = freq_df["upper"] - freq_df["lower"]
+        probs      = freq_df["probability"].values
 
-        bar_colors = [ACCENT if p > 0 else BORDER for p in probs]
+        bar_colors = [_s.ACCENT if p > 0 else _s.BORDER for p in probs]
 
         ax.bar(
             midpoints, probs, width=widths * 0.9,
             color=bar_colors, alpha=0.85, linewidth=0,
         )
 
-        # Cumulative probability line on right axis
         cum = freq_df["cumulative_pct"].values
-        ax2.plot(midpoints, cum * 100, color=GREEN, linewidth=2, marker="o",
+        ax2.plot(midpoints, cum * 100, color=_s.GREEN, linewidth=2, marker="o",
                  markersize=3, label="Cumulative %")
         ax2.set_ylim(0, 105)
-        ax2.set_ylabel("Cumulative %", color=TEXT_SECONDARY, fontsize=9)
-        ax2.tick_params(axis="y", colors=TEXT_SECONDARY, labelsize=8)
+        ax2.set_ylabel("Cumulative %", color=_s.TEXT_SECONDARY, fontsize=9)
+        ax2.tick_params(axis="y", colors=_s.TEXT_SECONDARY, labelsize=8)
 
-        # X axis: use % format
         x_ticks = midpoints.values[::max(1, len(midpoints) // 8)]
         ax.set_xticks(x_ticks)
         ax.set_xticklabels([f"{v*100:.0f}%" for v in x_ticks],
-                           rotation=45, ha="right", fontsize=8, color=TEXT_PRIMARY)
+                           rotation=45, ha="right", fontsize=8, color=_s.TEXT_PRIMARY)
 
-        ax.set_ylabel("Frequency", color=TEXT_SECONDARY, fontsize=9)
-        ax.tick_params(axis="y", colors=TEXT_SECONDARY, labelsize=8)
-        ax.tick_params(axis="x", colors=TEXT_PRIMARY)
+        ax.set_ylabel("Frequency", color=_s.TEXT_SECONDARY, fontsize=9)
+        ax.tick_params(axis="y", colors=_s.TEXT_SECONDARY, labelsize=8)
+        ax.tick_params(axis="x", colors=_s.TEXT_PRIMARY)
 
         title = f"{ticker} — Return Distribution" if ticker else "Return Distribution"
-        ax.set_title(title, color=TEXT_SECONDARY, fontsize=10, pad=6)
+        ax.set_title(title, color=_s.TEXT_SECONDARY, fontsize=10, pad=6)
 
         for spine in ax.spines.values():
-            spine.set_edgecolor(BORDER)
+            spine.set_edgecolor(_s.BORDER)
         for spine in ax2.spines.values():
-            spine.set_edgecolor(BORDER)
+            spine.set_edgecolor(_s.BORDER)
 
-        ax.set_facecolor(BG_PANEL)
-        self._figure.patch.set_facecolor(BG_PANEL)
+        ax.set_facecolor(_s.BG_PANEL)
+        self._figure.patch.set_facecolor(_s.BG_PANEL)
 
         self._canvas.draw()
 

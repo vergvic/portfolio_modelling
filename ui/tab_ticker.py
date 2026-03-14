@@ -15,13 +15,11 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
     QSizePolicy, QScrollArea, QAbstractScrollArea, QFrame,
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 
 from ui.widgets.metric_card import MetricCard
-from ui.styles import (
-    TEXT_SECONDARY, TEXT_PRIMARY, GREEN, RED, ORANGE, NEUTRAL, BG_PANEL
-)
+import ui.styles as _s
 
 
 class _PassThroughTable(QTableWidget):
@@ -33,13 +31,13 @@ class _PassThroughTable(QTableWidget):
 def _corr_color(v: float) -> str:
     """Traffic-light colour for a correlation value."""
     if v is None:
-        return NEUTRAL
+        return _s.NEUTRAL
     av = abs(v)
     if av <= 0.3:
-        return GREEN
+        return _s.GREEN
     if av <= 0.5:
-        return ORANGE
-    return RED
+        return _s.ORANGE
+    return _s.RED
 
 
 def _fit_table(t: QTableWidget) -> None:
@@ -50,6 +48,25 @@ def _fit_table(t: QTableWidget) -> None:
     t.setMinimumHeight(h)
 
 
+def _hex_to_rgb(h: str) -> tuple[int, int, int]:
+    h = h.lstrip("#")
+    return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+
+
+def _delta_color(value: float, max_scale: float) -> str:
+    """
+    Blend from the current theme's NEUTRAL toward GREEN (positive) or RED
+    (negative) with intensity proportional to abs(value) / max_scale.
+    """
+    t      = min(abs(value) / max_scale, 1.0)
+    n      = _hex_to_rgb(_s.NEUTRAL)
+    target = _hex_to_rgb(_s.GREEN if value >= 0 else _s.RED)
+    r = int(n[0] + t * (target[0] - n[0]))
+    g = int(n[1] + t * (target[1] - n[1]))
+    b = int(n[2] + t * (target[2] - n[2]))
+    return f"#{r:02X}{g:02X}{b:02X}"
+
+
 class TabTicker(QWidget):
     """Tab 2: Ticker vs Rest."""
 
@@ -58,8 +75,8 @@ class TabTicker(QWidget):
         self._portfolio: list[dict] = []
         self._weekly_returns: dict = {}
         self._spy_weekly = None
-        self._compute_fn = None   # injected: (ticker, portfolio, weekly_ret, spy) -> (with, without)
-        self._per_ticker_vol: dict = {}
+        self._compute_fn = None
+        self._per_ticker_vol: dict  = {}
         self._per_ticker_beta: dict = {}
         self._build_ui()
 
@@ -85,12 +102,12 @@ class TabTicker(QWidget):
 
         # ── Ticker selector ───────────────────────────────────────────
         sel_row = QHBoxLayout()
-        sel_lbl = QLabel("Select ticker:")
-        sel_lbl.setStyleSheet(f"color: {TEXT_SECONDARY}; font-weight: bold;")
+        self._sel_lbl = QLabel("Select ticker:")
+        self._sel_lbl.setStyleSheet(f"color: {_s.TEXT_SECONDARY}; font-weight: bold;")
         self._combo = QComboBox()
         self._combo.setMinimumWidth(140)
         self._combo.currentTextChanged.connect(self._on_ticker_changed)
-        sel_row.addWidget(sel_lbl)
+        sel_row.addWidget(self._sel_lbl)
         sel_row.addWidget(self._combo)
         sel_row.addStretch()
         root.addLayout(sel_row)
@@ -129,7 +146,6 @@ class TabTicker(QWidget):
         self._corr_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._corr_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         corr_layout.addWidget(self._corr_table)
-        root.addWidget(corr_box)
 
         # ── Portfolio impact ──────────────────────────────────────────
         impact_box = QGroupBox("Portfolio Impact (with vs without this ticker)")
@@ -137,8 +153,8 @@ class TabTicker(QWidget):
         impact_layout.setContentsMargins(8, 8, 8, 8)
 
         self._impact_table = _PassThroughTable(3, 3)
-        self._impact_table.setHorizontalHeaderLabels(["Metric", "With", "Without"])
-        self._impact_table.setVerticalHeaderLabels(["Port Beta", "Port Vol (%)", "Avg Corr"])
+        self._impact_table.setHorizontalHeaderLabels(["With", "Without", "Net Change"])
+        self._impact_table.setVerticalHeaderLabels(["Portfolio Beta", "Portfolio Vol (%)", "Avg Corr"])
         self._impact_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch
         )
@@ -153,16 +169,16 @@ class TabTicker(QWidget):
         )
         self._impact_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._impact_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-
-        # Pre-fill metric names
-        for i, label in enumerate(["Portfolio Beta", "Portfolio Vol (%)", "Avg Corr"]):
-            item = QTableWidgetItem(label)
-            item.setForeground(QColor(TEXT_SECONDARY))
-            self._impact_table.setItem(i, 0, item)
         _fit_table(self._impact_table)
 
         impact_layout.addWidget(self._impact_table)
-        root.addWidget(impact_box)
+
+        # ── Correlations + Impact side by side ────────────────────────
+        tables_row = QHBoxLayout()
+        tables_row.setSpacing(12)
+        tables_row.addWidget(corr_box, stretch=1)
+        tables_row.addWidget(impact_box, stretch=1)
+        root.addLayout(tables_row)
 
         root.addStretch()
 
@@ -177,15 +193,14 @@ class TabTicker(QWidget):
         weekly_returns: dict,
         spy_weekly,
     ) -> None:
-        """
-        Called by MainWindow whenever portfolio state changes.
-        Repopulates the combo box and refreshes the currently selected ticker.
-        """
-        self._portfolio = portfolio
+        self._portfolio      = portfolio
         self._weekly_returns = weekly_returns
-        self._spy_weekly = spy_weekly
+        self._spy_weekly     = spy_weekly
         self._per_ticker_vol  = metrics.get("per_ticker_vol", {})
         self._per_ticker_beta = metrics.get("per_ticker_beta", {})
+
+        # Refresh label colour to pick up current theme
+        self._sel_lbl.setStyleSheet(f"color: {_s.TEXT_SECONDARY}; font-weight: bold;")
 
         current = self._combo.currentText()
         self._combo.blockSignals(True)
@@ -204,13 +219,11 @@ class TabTicker(QWidget):
             self._clear()
             return
 
-        # Metric cards
         vol  = self._per_ticker_vol.get(ticker)
         beta = self._per_ticker_beta.get(ticker)
         self._vol_card.set_value(vol, scale=100.0)
         self._beta_card.set_value(beta)
 
-        # Pairwise correlations
         from compute.ticker_metrics import pairwise_correlations
         if ticker in self._weekly_returns:
             corr_dict = pairwise_correlations(ticker, self._weekly_returns)
@@ -218,7 +231,6 @@ class TabTicker(QWidget):
         else:
             self._corr_table.setRowCount(0)
 
-        # With / without impact
         if self._compute_fn and self._portfolio:
             try:
                 with_m, without_m = self._compute_fn(
@@ -233,7 +245,7 @@ class TabTicker(QWidget):
         self._corr_table.setRowCount(len(sorted_items))
         for row, (other, val) in enumerate(sorted_items):
             pair_item = QTableWidgetItem(f"{ticker} vs {other}")
-            pair_item.setForeground(QColor(TEXT_PRIMARY))
+            pair_item.setForeground(QColor(_s.TEXT_PRIMARY))
             val_item = QTableWidgetItem(f"{val:+.3f}")
             val_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             val_item.setForeground(QColor(_corr_color(val)))
@@ -243,44 +255,49 @@ class TabTicker(QWidget):
 
     def _fill_impact_table(self, ticker: str, with_m: dict, without_m: dict) -> None:
         self._impact_table.setHorizontalHeaderLabels(
-            ["Metric", f"With {ticker}", f"Without {ticker}"]
+            [f"With {ticker}", f"Without {ticker}", "Net Change"]
         )
         rows = [
-            ("Portfolio Beta",    "portfolio_beta", 1.0,   "{:+.3f}"),
-            ("Portfolio Vol (%)", "portfolio_vol",  100.0, "{:.1f}%"),
-            ("Avg Corr",          "avg_correlation",1.0,   "{:+.3f}"),
+            ("portfolio_beta",  1.0,   "{:+.3f}", 0.5),
+            ("portfolio_vol",   100.0, "{:.1f}%", 10.0),
+            ("avg_correlation", 1.0,   "{:+.3f}", 0.3),
         ]
-        for i, (label, key, scale, fmt) in enumerate(rows):
-            # Label column
-            lbl_item = QTableWidgetItem(label)
-            lbl_item.setForeground(QColor(TEXT_SECONDARY))
-            self._impact_table.setItem(i, 0, lbl_item)
+        for i, (key, scale, fmt, max_intensity) in enumerate(rows):
+            v_with    = with_m.get(key)
+            v_without = without_m.get(key)
 
-            # With column
-            v_with = with_m.get(key)
             with_item = QTableWidgetItem(
                 fmt.format(v_with * scale) if v_with is not None else "—"
             )
             with_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            with_item.setForeground(QColor(TEXT_PRIMARY))
-            self._impact_table.setItem(i, 1, with_item)
+            with_item.setForeground(QColor(_s.TEXT_PRIMARY))
+            self._impact_table.setItem(i, 0, with_item)
 
-            # Without column
-            v_without = without_m.get(key)
             without_item = QTableWidgetItem(
                 fmt.format(v_without * scale) if v_without is not None else "—"
             )
             without_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            without_item.setForeground(QColor(TEXT_SECONDARY))
-            self._impact_table.setItem(i, 2, without_item)
+            without_item.setForeground(QColor(_s.TEXT_SECONDARY))
+            self._impact_table.setItem(i, 1, without_item)
+
+            if v_with is not None and v_without is not None:
+                delta = (v_with - v_without) * scale
+                delta_item = QTableWidgetItem(fmt.format(delta))
+                delta_item.setForeground(QColor(_delta_color(delta, max_intensity)))
+            else:
+                delta_item = QTableWidgetItem("—")
+                delta_item.setForeground(QColor(_s.TEXT_SECONDARY))
+            delta_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self._impact_table.setItem(i, 2, delta_item)
+
         _fit_table(self._impact_table)
 
     def _clear_impact_table(self) -> None:
         for i in range(3):
-            for j in (1, 2):
+            for j in range(3):
                 item = QTableWidgetItem("—")
                 item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                item.setForeground(QColor(TEXT_SECONDARY))
+                item.setForeground(QColor(_s.TEXT_SECONDARY))
                 self._impact_table.setItem(i, j, item)
 
     def _clear(self) -> None:

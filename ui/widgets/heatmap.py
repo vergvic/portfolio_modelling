@@ -6,12 +6,13 @@ in Tab 1.  Draws with a RdBu_r diverging colormap.
 """
 import numpy as np
 import pandas as pd
+import matplotlib.cm as _mcm
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
 from PySide6.QtCore import Qt
 
-from ui.styles import BG_MAIN, BG_PANEL, TEXT_PRIMARY, TEXT_SECONDARY, BORDER
+import ui.styles as _s
 
 
 class _Canvas(FigureCanvas):
@@ -21,7 +22,11 @@ class _Canvas(FigureCanvas):
 
 
 class HeatmapWidget(QWidget):
-    """Matplotlib heatmap embedded in a Qt widget."""
+    """
+    Renders a square DataFrame as a coloured heatmap using matplotlib.
+
+    Call set_matrix(df) to update the display.
+    """
 
     def __init__(self, title: str = "", parent=None):
         super().__init__(parent)
@@ -29,17 +34,16 @@ class HeatmapWidget(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
 
-        self._figure = Figure(facecolor=BG_PANEL, tight_layout=True)
+        self._figure = Figure(figsize=(5, 4), facecolor=_s.BG_PANEL, tight_layout=True)
         self._canvas = _Canvas(self._figure)
-        self._canvas.setStyleSheet(f"background: {BG_PANEL};")
+        self._canvas.setStyleSheet(f"background: {_s.BG_PANEL};")
 
-        self._placeholder = QLabel("Add 2+ tickers to display matrix")
+        self._placeholder = QLabel("Not enough data")
         self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._placeholder.setStyleSheet(
-            f"color: {TEXT_SECONDARY}; font-size: 12px; background: {BG_PANEL};"
-            f" border: 1px solid {BORDER}; border-radius: 4px; padding: 30px;"
+            f"color: {_s.TEXT_SECONDARY}; font-size: 12px; background: {_s.BG_PANEL};"
+            f" border: 1px solid {_s.BORDER}; padding: 20px;"
         )
 
         layout.addWidget(self._placeholder)
@@ -73,47 +77,44 @@ class HeatmapWidget(QWidget):
             abs_max = 1.0
         vmin, vmax = -abs_max, abs_max
 
-        im = ax.imshow(vals, cmap="RdBu_r", vmin=vmin, vmax=vmax, aspect="auto")
+        ax.imshow(vals, cmap="RdBu_r", vmin=vmin, vmax=vmax, aspect="auto")
 
         # Axes labels
         tickers = list(df.columns)
         ax.set_xticks(range(n))
         ax.set_yticks(range(n))
         ax.set_xticklabels(tickers, rotation=45, ha="right",
-                           fontsize=9, color=TEXT_PRIMARY)
-        ax.set_yticklabels(tickers, fontsize=9, color=TEXT_PRIMARY)
-        ax.tick_params(colors=TEXT_PRIMARY, length=0)
+                           fontsize=9, color=_s.TEXT_PRIMARY)
+        ax.set_yticklabels(tickers, fontsize=9, color=_s.TEXT_PRIMARY)
+        ax.tick_params(colors=_s.TEXT_PRIMARY, length=0)
 
-        # Value annotations inside cells
+        # Value annotations — choose text colour by cell luminance
+        cmap = _mcm.get_cmap("RdBu_r")
         for i in range(n):
             for j in range(n):
                 v = vals[i, j]
                 if not np.isnan(v):
-                    text_color = "white" if abs(v) > abs_max * 0.5 else TEXT_PRIMARY
+                    norm_v = (v - vmin) / (vmax - vmin) if vmax != vmin else 0.5
+                    r, g, b, _ = cmap(float(np.clip(norm_v, 0, 1)))
+                    luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+                    text_color = "#1A1A2E" if luminance > 0.35 else "white"
                     ax.text(
                         j, i,
                         f"{v:{fmt}}",
                         ha="center", va="center",
                         fontsize=8, color=text_color,
+                        fontweight="bold",
                     )
 
         # Title
         if self._title:
-            ax.set_title(self._title, color=TEXT_SECONDARY, fontsize=10, pad=8)
+            ax.set_title(self._title, color=_s.TEXT_SECONDARY, fontsize=10, pad=6)
 
-        # Style
-        ax.set_facecolor(BG_PANEL)
-        self._figure.patch.set_facecolor(BG_PANEL)
         for spine in ax.spines.values():
-            spine.set_edgecolor(BORDER)
+            spine.set_edgecolor(_s.BORDER)
 
-        # Colorbar
-        cbar = self._figure.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-        cbar.ax.yaxis.set_tick_params(color=TEXT_SECONDARY, labelsize=8)
-        plt_objs = cbar.ax.get_yticklabels()
-        for lbl in plt_objs:
-            lbl.set_color(TEXT_SECONDARY)
-        cbar.outline.set_edgecolor(BORDER)
+        ax.set_facecolor(_s.BG_PANEL)
+        self._figure.patch.set_facecolor(_s.BG_PANEL)
 
         self._canvas.draw()
 

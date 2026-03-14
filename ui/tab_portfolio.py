@@ -17,7 +17,7 @@ from config import VOL_TARGET, BETA_TARGET, CORR_TARGET
 from ui.widgets.metric_card  import MetricCard
 from ui.widgets.heatmap      import HeatmapWidget
 from ui.widgets.ticker_list  import TickerListWidget
-from ui.styles               import TEXT_SECONDARY, BORDER
+import ui.styles as _s
 
 
 class TabPortfolio(QWidget):

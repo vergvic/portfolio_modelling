@@ -16,6 +16,8 @@ import scipy.stats as stats
 
 from config import DOR_CC_BIN_WIDTH, DOR_HL_AUTO_BINS, NORMAL_SD_PCTS
 
+PERCENTILE_LEVELS = [0.01, 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99]
+
 log = logging.getLogger(__name__)
 
 
@@ -231,6 +233,25 @@ def sd_bounds(returns: pd.Series) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Percentile distribution
+# ---------------------------------------------------------------------------
+
+def percentiles(
+    returns: pd.Series,
+    levels: list[float] = PERCENTILE_LEVELS,
+) -> list[dict]:
+    """
+    Return the return value at each percentile level.
+
+    Returns a list of dicts: [{"level": 0.01, "value": -0.123}, ...]
+    """
+    clean = returns.dropna()
+    if clean.empty:
+        return []
+    return [{"level": lvl, "value": float(clean.quantile(lvl))} for lvl in levels]
+
+
+# ---------------------------------------------------------------------------
 # Combined DoR computation
 # ---------------------------------------------------------------------------
 
@@ -249,10 +270,11 @@ def compute_dor(
     """
     def _run(returns: pd.Series, bw: float | None) -> dict:
         return {
-            "freq_dist": frequency_distribution(returns, bin_width=bw),
-            "stats": descriptive_stats(returns),
-            "split": pos_neg_zero_split(returns),
-            "sd_bounds": sd_bounds(returns),
+            "freq_dist":   frequency_distribution(returns, bin_width=bw),
+            "stats":       descriptive_stats(returns),
+            "split":       pos_neg_zero_split(returns),
+            "sd_bounds":   sd_bounds(returns),
+            "percentiles": percentiles(returns),
         }
 
     hl_bw = hl_bin_width(hl_returns)

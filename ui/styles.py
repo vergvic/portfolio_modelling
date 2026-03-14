@@ -1,46 +1,143 @@
 """
-Qt stylesheet and colour constants.
+Qt stylesheet and colour constants with multi-theme support.
 
-Dark theme designed for a financial data app — high contrast,
-clear data hierarchy, no distracting decoration.
+Themes (cycle with the Theme button):
+  Amber    — CRT amber-on-black terminal (default)
+  Phosphor — classic green phosphor monitor
+  DOS      — retro DOS blue
+  Modern   — current dark purple (original)
+
+All module-level colour globals (BG_MAIN, TEXT_PRIMARY, etc.) are updated
+by apply_theme() so any code that accesses them as  _s.BG_MAIN  will always
+see the live value after a theme change.
 """
+from __future__ import annotations
 
 # ---------------------------------------------------------------------------
-# Colours
+# Theme palettes
 # ---------------------------------------------------------------------------
-BG_MAIN       = "#1E1E2E"   # main background
-BG_PANEL      = "#2A2A3E"   # panels / cards
-BG_INPUT      = "#313145"   # input fields
-BORDER        = "#3E3E5E"   # subtle borders
 
-TEXT_PRIMARY   = "#E0E0F0"  # primary text
-TEXT_SECONDARY = "#9090B0"  # labels, captions
-TEXT_DISABLED  = "#555570"
+THEMES: dict[str, dict] = {
+    "Amber": {
+        "BG_MAIN":        "#080808",
+        "BG_PANEL":       "#111111",
+        "BG_INPUT":       "#1A1A1A",
+        "BORDER":         "#B86800",
+        "TEXT_PRIMARY":   "#FFA500",
+        "TEXT_SECONDARY": "#7A4A00",
+        "TEXT_DISABLED":  "#3D2500",
+        "GREEN":          "#6BCF6B",
+        "RED":            "#FF5555",
+        "ORANGE":         "#FFD700",
+        "NEUTRAL":        "#7A4A00",
+        "ACCENT":         "#FFC200",
+        "FONT_FAMILY":    '"Courier New", Consolas, monospace',
+        "BORDER_RADIUS":  "0px",
+        "BORDER_WIDTH":   "2px",
+        "SCROLLBAR_W":    "10px",
+    },
+    "Phosphor": {
+        "BG_MAIN":        "#020C02",
+        "BG_PANEL":       "#050F05",
+        "BG_INPUT":       "#091409",
+        "BORDER":         "#009900",
+        "TEXT_PRIMARY":   "#00FF41",
+        "TEXT_SECONDARY": "#007520",
+        "TEXT_DISABLED":  "#003A10",
+        "GREEN":          "#00FF41",
+        "RED":            "#FF4040",
+        "ORANGE":         "#BBFF00",
+        "NEUTRAL":        "#007520",
+        "ACCENT":         "#00CC33",
+        "FONT_FAMILY":    '"Courier New", Consolas, monospace',
+        "BORDER_RADIUS":  "0px",
+        "BORDER_WIDTH":   "2px",
+        "SCROLLBAR_W":    "10px",
+    },
+    "DOS": {
+        "BG_MAIN":        "#000080",
+        "BG_PANEL":       "#0000A8",
+        "BG_INPUT":       "#000055",
+        "BORDER":         "#AAAAAA",
+        "TEXT_PRIMARY":   "#FFFFFF",
+        "TEXT_SECONDARY": "#AAAAAA",
+        "TEXT_DISABLED":  "#555577",
+        "GREEN":          "#55FF55",
+        "RED":            "#FF5555",
+        "ORANGE":         "#FFAA00",
+        "NEUTRAL":        "#AAAAAA",
+        "ACCENT":         "#FFFF55",
+        "FONT_FAMILY":    '"Courier New", Consolas, monospace',
+        "BORDER_RADIUS":  "0px",
+        "BORDER_WIDTH":   "2px",
+        "SCROLLBAR_W":    "12px",
+    },
+    "Modern": {
+        "BG_MAIN":        "#1E1E2E",
+        "BG_PANEL":       "#2A2A3E",
+        "BG_INPUT":       "#313145",
+        "BORDER":         "#3E3E5E",
+        "TEXT_PRIMARY":   "#E0E0F0",
+        "TEXT_SECONDARY": "#9090B0",
+        "TEXT_DISABLED":  "#555570",
+        "GREEN":          "#4CAF50",
+        "RED":            "#F44336",
+        "ORANGE":         "#FF9800",
+        "NEUTRAL":        "#9090B0",
+        "ACCENT":         "#7C6AF5",
+        "FONT_FAMILY":    '"Segoe UI", Arial, sans-serif',
+        "BORDER_RADIUS":  "6px",
+        "BORDER_WIDTH":   "1px",
+        "SCROLLBAR_W":    "8px",
+    },
+}
 
-GREEN   = "#4CAF50"   # in-target / positive
-RED     = "#F44336"   # out-of-target / negative
-ORANGE  = "#FF9800"   # warning / borderline
-NEUTRAL = "#9090B0"   # neutral / not enough data
+THEME_ORDER: list[str] = ["Amber", "Phosphor", "DOS", "Modern"]
 
-ACCENT  = "#7C6AF5"   # tab highlight, hover accent
+_current_name: str = "Amber"
 
 # ---------------------------------------------------------------------------
-# Traffic-light helper
+# Module-level colour globals — updated by apply_theme()
 # ---------------------------------------------------------------------------
+BG_MAIN        = ""
+BG_PANEL       = ""
+BG_INPUT       = ""
+BORDER         = ""
+TEXT_PRIMARY   = ""
+TEXT_SECONDARY = ""
+TEXT_DISABLED  = ""
+GREEN          = ""
+RED            = ""
+ORANGE         = ""
+NEUTRAL        = ""
+ACCENT         = ""
+FONT_FAMILY    = ""
+BORDER_RADIUS  = ""
+BORDER_WIDTH   = ""
+SCROLLBAR_W    = ""
+STYLESHEET     = ""
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def current_theme_name() -> str:
+    return _current_name
+
+
+def next_theme_name() -> str:
+    idx = THEME_ORDER.index(_current_name)
+    return THEME_ORDER[(idx + 1) % len(THEME_ORDER)]
+
 
 def traffic_light(value: float | None, target_range: tuple[float, float]) -> str:
-    """
-    Return a colour string based on whether *value* is inside target_range.
-
-    target_range = (low, high) — both bounds inclusive.
-    Returns NEUTRAL for None, GREEN for in-range, RED for out-of-range.
-    """
+    """Return a colour string based on whether value is inside target_range."""
     if value is None:
         return NEUTRAL
     lo, hi = target_range
     if lo <= value <= hi:
         return GREEN
-    # Orange for just outside (within 20 % of the bound width)
     width = abs(hi - lo)
     margin = 0.20 * width
     if (lo - margin) <= value <= (hi + margin):
@@ -48,170 +145,209 @@ def traffic_light(value: float | None, target_range: tuple[float, float]) -> str
     return RED
 
 
+def _darken(hex_color: str, factor: float) -> str:
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"#{int(r * factor):02X}{int(g * factor):02X}{int(b * factor):02X}"
+
+
 # ---------------------------------------------------------------------------
-# Global Qt stylesheet
+# Stylesheet builder
 # ---------------------------------------------------------------------------
 
-STYLESHEET = f"""
+def build_stylesheet() -> str:
+    t   = THEMES[_current_name]
+    br  = t["BORDER_RADIUS"]
+    bw  = t["BORDER_WIDTH"]
+    ff  = t["FONT_FAMILY"]
+    sw  = t["SCROLLBAR_W"]
+    bg  = t["BG_MAIN"]
+    panel = t["BG_PANEL"]
+    inp = t["BG_INPUT"]
+    brd = t["BORDER"]
+    pri = t["TEXT_PRIMARY"]
+    sec = t["TEXT_SECONDARY"]
+    acc = t["ACCENT"]
+    red = t["RED"]
+    org = t["ORANGE"]
+    pressed = _darken(acc, 0.65)
+
+    return f"""
 /* ── Base ── */
 QWidget {{
-    background-color: {BG_MAIN};
-    color: {TEXT_PRIMARY};
-    font-family: "Segoe UI", Arial, sans-serif;
+    background-color: {bg};
+    color: {pri};
+    font-family: {ff};
     font-size: 13px;
 }}
 
 /* ── Tabs ── */
 QTabWidget::pane {{
-    border: 1px solid {BORDER};
-    background: {BG_MAIN};
+    border: {bw} solid {brd};
+    background: {bg};
 }}
 QTabBar::tab {{
-    background: {BG_PANEL};
-    color: {TEXT_SECONDARY};
+    background: {panel};
+    color: {sec};
     padding: 8px 20px;
-    border: 1px solid {BORDER};
+    border: {bw} solid {brd};
     border-bottom: none;
     margin-right: 2px;
+    border-radius: 0px;
 }}
 QTabBar::tab:selected {{
-    background: {BG_MAIN};
-    color: {TEXT_PRIMARY};
-    border-bottom: 2px solid {ACCENT};
+    background: {bg};
+    color: {pri};
+    border-bottom: 3px solid {acc};
 }}
 QTabBar::tab:hover {{
-    color: {TEXT_PRIMARY};
-    background: {BG_INPUT};
+    color: {pri};
+    background: {inp};
 }}
 
 /* ── Frames / panels ── */
 QFrame#MetricCard {{
-    background: {BG_PANEL};
-    border: 1px solid {BORDER};
-    border-radius: 8px;
+    background: {panel};
+    border: {bw} solid {brd};
+    border-radius: {br};
 }}
 QFrame#Panel {{
-    background: {BG_PANEL};
-    border: 1px solid {BORDER};
-    border-radius: 6px;
+    background: {panel};
+    border: {bw} solid {brd};
+    border-radius: {br};
 }}
 
 /* ── GroupBox ── */
 QGroupBox {{
-    background: {BG_PANEL};
-    border: 1px solid {BORDER};
-    border-radius: 6px;
+    background: {panel};
+    border: {bw} solid {brd};
+    border-radius: {br};
     margin-top: 18px;
     padding-top: 8px;
     font-weight: bold;
-    color: {TEXT_SECONDARY};
+    color: {sec};
 }}
 QGroupBox::title {{
     subcontrol-origin: margin;
     left: 12px;
     top: -2px;
     padding: 0 4px;
-    color: {TEXT_SECONDARY};
+    color: {acc};
+    font-weight: bold;
 }}
 
 /* ── Buttons ── */
 QPushButton {{
-    background: {BG_INPUT};
-    color: {TEXT_PRIMARY};
-    border: 1px solid {BORDER};
-    border-radius: 5px;
+    background: {inp};
+    color: {pri};
+    border: {bw} solid {brd};
+    border-radius: {br};
     padding: 6px 14px;
     min-width: 80px;
 }}
 QPushButton:hover {{
-    background: {ACCENT};
-    border-color: {ACCENT};
+    background: {acc};
+    color: {bg};
+    border-color: {acc};
 }}
 QPushButton:pressed {{
-    background: #5A4FD4;
+    background: {pressed};
 }}
 QPushButton#AddButton {{
     background: transparent;
-    color: {ACCENT};
-    border: 1px solid {ACCENT};
-    border-radius: 4px;
+    color: {acc};
+    border: {bw} solid {acc};
+    border-radius: {br};
     padding: 4px 10px;
     font-size: 12px;
     min-width: 0;
 }}
 QPushButton#AddButton:hover {{
-    background: {ACCENT};
-    color: white;
+    background: {acc};
+    color: {bg};
 }}
 QPushButton#RefreshButton {{
-    background: {BG_INPUT};
-    color: {TEXT_SECONDARY};
-    border: 1px solid {BORDER};
-    border-radius: 4px;
+    background: {inp};
+    color: {sec};
+    border: {bw} solid {brd};
+    border-radius: {br};
     padding: 5px 12px;
     font-size: 12px;
     min-width: 0;
 }}
 QPushButton#RefreshButton:hover {{
-    color: {TEXT_PRIMARY};
-    border-color: {ACCENT};
+    color: {pri};
+    border-color: {acc};
+}}
+QPushButton#ThemeButton {{
+    background: transparent;
+    color: {acc};
+    border: {bw} solid {acc};
+    border-radius: {br};
+    padding: 4px 14px;
+    font-size: 11px;
+    min-width: 0;
+}}
+QPushButton#ThemeButton:hover {{
+    background: {acc};
+    color: {bg};
 }}
 
 /* ── LineEdit / SpinBox ── */
 QLineEdit, QDoubleSpinBox, QSpinBox {{
-    background: {BG_INPUT};
-    border: 1px solid {BORDER};
-    border-radius: 4px;
+    background: {inp};
+    border: {bw} solid {brd};
+    border-radius: {br};
     padding: 5px 8px;
-    color: {TEXT_PRIMARY};
-    selection-background-color: {ACCENT};
+    color: {pri};
+    selection-background-color: {acc};
 }}
 QLineEdit:focus, QDoubleSpinBox:focus {{
-    border-color: {ACCENT};
+    border-color: {acc};
 }}
 
 /* ── ComboBox ── */
 QComboBox {{
-    background: {BG_INPUT};
-    border: 1px solid {BORDER};
-    border-radius: 4px;
+    background: {inp};
+    border: {bw} solid {brd};
+    border-radius: {br};
     padding: 5px 10px;
-    color: {TEXT_PRIMARY};
+    color: {pri};
     min-width: 120px;
 }}
-QComboBox:hover {{ border-color: {ACCENT}; }}
+QComboBox:hover {{ border-color: {acc}; }}
 QComboBox::drop-down {{
     border: none;
     width: 20px;
 }}
 QComboBox QAbstractItemView {{
-    background: {BG_INPUT};
-    border: 1px solid {BORDER};
-    selection-background-color: {ACCENT};
-    color: {TEXT_PRIMARY};
+    background: {inp};
+    border: {bw} solid {brd};
+    selection-background-color: {acc};
+    color: {pri};
 }}
 
 /* ── Tables ── */
 QTableWidget {{
-    background: {BG_PANEL};
-    gridline-color: {BORDER};
-    border: 1px solid {BORDER};
-    border-radius: 4px;
-    alternate-background-color: {BG_INPUT};
+    background: {panel};
+    gridline-color: {brd};
+    border: {bw} solid {brd};
+    border-radius: {br};
+    alternate-background-color: {inp};
 }}
 QTableWidget::item {{
     padding: 4px 8px;
 }}
 QTableWidget::item:selected {{
-    background: {ACCENT};
-    color: white;
+    background: {acc};
+    color: {bg};
 }}
 QHeaderView::section {{
-    background: {BG_INPUT};
-    color: {TEXT_SECONDARY};
+    background: {inp};
+    color: {acc};
     border: none;
-    border-right: 1px solid {BORDER};
-    border-bottom: 1px solid {BORDER};
+    border-right: 1px solid {brd};
+    border-bottom: {bw} solid {brd};
     padding: 5px 8px;
     font-weight: bold;
     font-size: 12px;
@@ -219,67 +355,67 @@ QHeaderView::section {{
 
 /* ── ListWidget ── */
 QListWidget {{
-    background: {BG_PANEL};
-    border: 1px solid {BORDER};
-    border-radius: 4px;
-    alternate-background-color: {BG_INPUT};
+    background: {panel};
+    border: {bw} solid {brd};
+    border-radius: {br};
+    alternate-background-color: {inp};
     outline: none;
 }}
 QListWidget::item {{
     padding: 6px 10px;
-    border-bottom: 1px solid {BORDER};
+    border-bottom: 1px solid {brd};
 }}
 QListWidget::item:selected {{
-    background: {ACCENT};
-    color: white;
+    background: {acc};
+    color: {bg};
 }}
 QListWidget::item:hover {{
-    background: {BG_INPUT};
+    background: {inp};
 }}
 
 /* ── ScrollBar ── */
 QScrollBar:vertical {{
-    background: {BG_PANEL};
-    width: 8px;
-    border-radius: 4px;
+    background: {panel};
+    width: {sw};
+    border-radius: 0px;
+    border: 1px solid {brd};
 }}
 QScrollBar::handle:vertical {{
-    background: {BORDER};
-    border-radius: 4px;
+    background: {brd};
+    border-radius: 0px;
     min-height: 20px;
 }}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
 
 /* ── Labels ── */
 QLabel#SectionHeader {{
-    color: {TEXT_SECONDARY};
+    color: {acc};
     font-size: 11px;
     font-weight: bold;
     letter-spacing: 1px;
-    text-transform: uppercase;
 }}
 QLabel#WarningBanner {{
-    background: #3D2B0F;
-    color: {ORANGE};
-    border: 1px solid {ORANGE};
-    border-radius: 4px;
+    background: {inp};
+    color: {org};
+    border: {bw} solid {org};
+    border-radius: {br};
     padding: 6px 12px;
 }}
 QLabel#ErrorLabel {{
-    color: {RED};
+    color: {red};
     font-size: 11px;
 }}
 
 /* ── Dialog ── */
 QDialog {{
-    background: {BG_MAIN};
+    background: {bg};
 }}
 
 /* ── StatusBar ── */
 QStatusBar {{
-    background: {BG_PANEL};
-    color: {TEXT_SECONDARY};
-    border-top: 1px solid {BORDER};
+    background: {panel};
+    color: {sec};
+    border-top: {bw} solid {brd};
     font-size: 12px;
     padding: 2px 8px;
 }}
@@ -287,32 +423,74 @@ QStatusBar::item {{ border: none; }}
 
 /* ── RadioButton ── */
 QRadioButton {{
-    color: {TEXT_PRIMARY};
+    color: {pri};
     spacing: 6px;
 }}
 QRadioButton::indicator {{
     width: 14px;
     height: 14px;
-    border: 2px solid {BORDER};
-    border-radius: 7px;
-    background: {BG_INPUT};
+    border: {bw} solid {brd};
+    border-radius: 0px;
+    background: {inp};
 }}
 QRadioButton::indicator:checked {{
-    background: {ACCENT};
-    border-color: {ACCENT};
+    background: {acc};
+    border-color: {acc};
 }}
 
 /* ── Separator ── */
 QFrame[frameShape="4"], QFrame[frameShape="5"] {{
-    color: {BORDER};
+    color: {brd};
 }}
 
 /* ── ToolTip ── */
 QToolTip {{
-    background: {BG_INPUT};
-    color: {TEXT_PRIMARY};
-    border: 1px solid {BORDER};
+    background: {inp};
+    color: {pri};
+    border: {bw} solid {brd};
     padding: 4px 8px;
-    border-radius: 3px;
+    border-radius: {br};
 }}
 """
+
+
+# ---------------------------------------------------------------------------
+# Theme applier — updates all module globals + rebuilds STYLESHEET
+# ---------------------------------------------------------------------------
+
+def apply_theme(name: str) -> str:
+    """
+    Switch to the named theme.  Updates every module-level colour global and
+    regenerates STYLESHEET.  Returns the new stylesheet string.
+    """
+    global _current_name
+    global BG_MAIN, BG_PANEL, BG_INPUT, BORDER
+    global TEXT_PRIMARY, TEXT_SECONDARY, TEXT_DISABLED
+    global GREEN, RED, ORANGE, NEUTRAL, ACCENT
+    global FONT_FAMILY, BORDER_RADIUS, BORDER_WIDTH, SCROLLBAR_W
+    global STYLESHEET
+
+    _current_name  = name
+    t              = THEMES[name]
+    BG_MAIN        = t["BG_MAIN"]
+    BG_PANEL       = t["BG_PANEL"]
+    BG_INPUT       = t["BG_INPUT"]
+    BORDER         = t["BORDER"]
+    TEXT_PRIMARY   = t["TEXT_PRIMARY"]
+    TEXT_SECONDARY = t["TEXT_SECONDARY"]
+    TEXT_DISABLED  = t["TEXT_DISABLED"]
+    GREEN          = t["GREEN"]
+    RED            = t["RED"]
+    ORANGE         = t["ORANGE"]
+    NEUTRAL        = t["NEUTRAL"]
+    ACCENT         = t["ACCENT"]
+    FONT_FAMILY    = t["FONT_FAMILY"]
+    BORDER_RADIUS  = t["BORDER_RADIUS"]
+    BORDER_WIDTH   = t["BORDER_WIDTH"]
+    SCROLLBAR_W    = t["SCROLLBAR_W"]
+    STYLESHEET     = build_stylesheet()
+    return STYLESHEET
+
+
+# Apply default theme on module import
+apply_theme("Amber")

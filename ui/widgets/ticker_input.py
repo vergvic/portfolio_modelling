@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
-from ui.styles import ACCENT, RED, TEXT_SECONDARY, TEXT_PRIMARY
+import ui.styles as _s
 
 
 class TickerInputDialog(QDialog):
@@ -35,7 +35,7 @@ class TickerInputDialog(QDialog):
         layout.setContentsMargins(20, 20, 20, 20)
 
         title = QLabel("Add Position")
-        title.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {TEXT_PRIMARY};")
+        title.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {_s.TEXT_PRIMARY};")
         layout.addWidget(title)
 
         sep = QFrame()
@@ -50,7 +50,7 @@ class TickerInputDialog(QDialog):
         layout.addWidget(self._ticker_edit)
 
         self._error_label = QLabel("")
-        self._error_label.setStyleSheet(f"color: {RED}; font-size: 11px;")
+        self._error_label.setStyleSheet(f"color: {_s.RED}; font-size: 11px;")
         self._error_label.hide()
         layout.addWidget(self._error_label)
 
@@ -84,8 +84,8 @@ class TickerInputDialog(QDialog):
         add_btn = QPushButton("Add Position")
         add_btn.setDefault(True)
         add_btn.setStyleSheet(
-            f"background: {ACCENT}; color: white; border: none;"
-            f" border-radius: 5px; padding: 6px 16px;"
+            f"background: {_s.ACCENT}; color: {_s.BG_MAIN}; border: none;"
+            f" border-radius: {_s.BORDER_RADIUS}; padding: 6px 16px; font-weight: bold;"
         )
         add_btn.clicked.connect(self._on_accept)
         btn_row.addWidget(cancel_btn)
@@ -116,5 +116,5 @@ class TickerInputDialog(QDialog):
     @staticmethod
     def _lbl(text: str) -> QLabel:
         lbl = QLabel(text)
-        lbl.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 11px; font-weight: bold;")
+        lbl.setStyleSheet(f"color: {_s.TEXT_SECONDARY}; font-size: 11px; font-weight: bold;")
         return lbl

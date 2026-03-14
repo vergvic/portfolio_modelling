@@ -3,9 +3,10 @@ Tab 3 — Distribution of Returns
 
 Two stacked panels, each with:
   - HistogramWidget (frequency bars + cumulative probability overlay)
-  - Two-column stats area:
-      Left:  Descriptive stats table
-      Right: Positive/Negative/Zero split + SD bounds vs normal
+  - Three-column stats area:
+      Left:   Descriptive stats table
+      Middle: Positive/Negative/Zero split + SD bounds vs normal
+      Right:  Percentile distribution
 
 Uses monthly data (full history) for both C-C and H-L return series.
 """
@@ -13,12 +14,13 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
     QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
     QScrollArea, QFrame, QSizePolicy, QAbstractScrollArea,
+    QDoubleSpinBox,
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 
 from ui.widgets.histogram import HistogramWidget
-from ui.styles import TEXT_SECONDARY, TEXT_PRIMARY, GREEN, RED, ORANGE, NEUTRAL
+import ui.styles as _s
 
 
 class TabDoR(QWidget):
@@ -26,7 +28,7 @@ class TabDoR(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._dor_data: dict = {}   # {ticker: compute_dor() output}
+        self._dor_data: dict = {}
         self._build_ui()
 
     # ------------------------------------------------------------------
@@ -37,12 +39,12 @@ class TabDoR(QWidget):
 
         # Ticker selector
         sel_row = QHBoxLayout()
-        sel_lbl = QLabel("Select ticker:")
-        sel_lbl.setStyleSheet(f"color: {TEXT_SECONDARY}; font-weight: bold;")
+        self._sel_lbl = QLabel("Select ticker:")
+        self._sel_lbl.setStyleSheet(f"color: {_s.TEXT_SECONDARY}; font-weight: bold;")
         self._combo = QComboBox()
         self._combo.setMinimumWidth(140)
         self._combo.currentTextChanged.connect(self._on_ticker_changed)
-        sel_row.addWidget(sel_lbl)
+        sel_row.addWidget(self._sel_lbl)
         sel_row.addWidget(self._combo)
         sel_row.addStretch()
         root.addLayout(sel_row)
@@ -58,6 +60,10 @@ class TabDoR(QWidget):
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(16)
 
+        # Stops & Targets block (ticker-level, not per-panel)
+        self._stops_widget = _StopsTargetsWidget()
+        content_layout.addWidget(self._stops_widget)
+
         # Two panels
         self._cc_panel = _DorPanel("Close-to-Close Returns")
         self._hl_panel = _DorPanel("High-to-Low Returns")
@@ -70,12 +76,9 @@ class TabDoR(QWidget):
 
     # ------------------------------------------------------------------
     def refresh_display(self, portfolio: list[dict], dor_data: dict) -> None:
-        """
-        Called by MainWindow when portfolio or data changes.
-
-        dor_data: {ticker: compute_dor() result}
-        """
         self._dor_data = dor_data
+        self._sel_lbl.setStyleSheet(f"color: {_s.TEXT_SECONDARY}; font-weight: bold;")
+
         current = self._combo.currentText()
 
         self._combo.blockSignals(True)
@@ -89,6 +92,7 @@ class TabDoR(QWidget):
         self._on_ticker_changed(self._combo.currentText())
 
     def _on_ticker_changed(self, ticker: str) -> None:
+        self._stops_widget.reset()
         if not ticker or ticker not in self._dor_data:
             self._cc_panel.clear()
             self._hl_panel.clear()
@@ -97,6 +101,117 @@ class TabDoR(QWidget):
         dor = self._dor_data[ticker]
         self._cc_panel.set_data(dor.get("cc", {}), ticker)
         self._hl_panel.set_data(dor.get("hl", {}), ticker)
+
+
+# ---------------------------------------------------------------------------
+# Stops & Targets widget
+# ---------------------------------------------------------------------------
+
+class _StopsTargetsWidget(QGroupBox):
+    """
+    Interactive R:R estimator.
+    User enters Stop %, Target %, and Current Price.
+    Stop Price and Target Price are computed and displayed instantly.
+    Values are not persisted — reset when the widget is hidden/cleared.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__("Stops & Targets", parent)
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        root = QVBoxLayout(self)
+        root.setContentsMargins(10, 16, 10, 10)
+        root.setSpacing(10)
+
+        # ── Row 1: inputs ────────────────────────────────────────────
+        inputs_row = QHBoxLayout()
+        inputs_row.setSpacing(24)
+
+        def _lbl(text):
+            l = QLabel(text)
+            l.setStyleSheet(f"color: {_s.TEXT_SECONDARY}; font-size: 11px;")
+            return l
+
+        stop_col = QVBoxLayout()
+        stop_col.addWidget(_lbl("Stop %"))
+        self._stop_spin = QDoubleSpinBox()
+        self._stop_spin.setRange(0.0, 100.0)
+        self._stop_spin.setDecimals(1)
+        self._stop_spin.setSuffix(" %")
+        self._stop_spin.setMinimumWidth(110)
+        stop_col.addWidget(self._stop_spin)
+        inputs_row.addLayout(stop_col)
+
+        target_col = QVBoxLayout()
+        target_col.addWidget(_lbl("Target %"))
+        self._target_spin = QDoubleSpinBox()
+        self._target_spin.setRange(0.0, 1000.0)
+        self._target_spin.setDecimals(1)
+        self._target_spin.setSuffix(" %")
+        self._target_spin.setMinimumWidth(110)
+        target_col.addWidget(self._target_spin)
+        inputs_row.addLayout(target_col)
+
+        price_col = QVBoxLayout()
+        price_col.addWidget(_lbl("Current Price"))
+        self._price_spin = QDoubleSpinBox()
+        self._price_spin.setRange(0.0, 9_999_999.0)
+        self._price_spin.setDecimals(2)
+        self._price_spin.setMinimumWidth(130)
+        price_col.addWidget(self._price_spin)
+        inputs_row.addLayout(price_col)
+
+        inputs_row.addStretch()
+        root.addLayout(inputs_row)
+
+        # ── Row 2: computed outputs ───────────────────────────────────
+        outputs_row = QHBoxLayout()
+        outputs_row.setSpacing(32)
+
+        def _result_pair(caption):
+            col = QVBoxLayout()
+            cap = QLabel(caption)
+            cap.setStyleSheet(f"color: {_s.TEXT_SECONDARY}; font-size: 11px;")
+            val = QLabel("—")
+            val.setStyleSheet(
+                f"color: {_s.TEXT_PRIMARY}; font-size: 15px; font-weight: bold;"
+            )
+            col.addWidget(cap)
+            col.addWidget(val)
+            return col, val
+
+        stop_out_col,   self._stop_price_lbl   = _result_pair("Stop Price")
+        target_out_col, self._target_price_lbl = _result_pair("Target Price")
+        outputs_row.addLayout(stop_out_col)
+        outputs_row.addLayout(target_out_col)
+        outputs_row.addStretch()
+        root.addLayout(outputs_row)
+
+        self._stop_spin.valueChanged.connect(self._recompute)
+        self._target_spin.valueChanged.connect(self._recompute)
+        self._price_spin.valueChanged.connect(self._recompute)
+
+    # ------------------------------------------------------------------
+    def _recompute(self) -> None:
+        price  = self._price_spin.value()
+        stop_p = self._stop_spin.value() / 100.0
+        tgt_p  = self._target_spin.value() / 100.0
+
+        if price > 0:
+            self._stop_price_lbl.setText(f"{price * (1.0 - stop_p):,.2f}")
+            self._target_price_lbl.setText(f"{price * (1.0 + tgt_p):,.2f}")
+        else:
+            self._stop_price_lbl.setText("—")
+            self._target_price_lbl.setText("—")
+
+    def reset(self) -> None:
+        for spin in (self._stop_spin, self._target_spin, self._price_spin):
+            spin.blockSignals(True)
+            spin.setValue(0.0)
+            spin.blockSignals(False)
+        self._stop_price_lbl.setText("—")
+        self._target_price_lbl.setText("—")
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +235,7 @@ class _DorPanel(QGroupBox):
         self._histogram.setMinimumHeight(280)
         root.addWidget(self._histogram)
 
-        # Stats row
+        # Stats row — three panels side by side
         stats_row = QHBoxLayout()
         stats_row.setSpacing(12)
 
@@ -128,23 +243,34 @@ class _DorPanel(QGroupBox):
         self._stats_table = _make_two_col_table(["Statistic", "Value"])
         stats_row.addWidget(self._stats_table, stretch=1)
 
-        # Right: pos/neg/zero + SD bounds
-        right = QVBoxLayout()
-        right.setSpacing(8)
+        # Middle: pos/neg/zero + SD bounds
+        middle = QVBoxLayout()
+        middle.setSpacing(8)
 
-        self._pnz_table  = _make_two_col_table(["", "Positive", "Negative", "Zero"],
-                                                cols=4)
-        self._sd_table   = _make_two_col_table(["Bound", "Actual %", "Normal %"],
-                                               cols=3)
-        right.addWidget(QLabel("Pos / Neg / Zero Split"))
-        right.addWidget(self._pnz_table)
-        right.addWidget(QLabel("SD Bounds vs Normal"))
-        right.addWidget(self._sd_table)
+        self._pnz_table = _make_two_col_table(["", "Positive", "Negative", "Zero"], cols=4)
+        self._sd_table  = _make_two_col_table(["Bound", "Actual %", "Normal %"], cols=3)
+        lbl_pnz = QLabel("Pos / Neg / Zero Split")
+        lbl_pnz.setStyleSheet(f"color: {_s.TEXT_SECONDARY}; font-size: 11px; font-weight: bold;")
+        lbl_sd = QLabel("SD Bounds vs Normal")
+        lbl_sd.setStyleSheet(f"color: {_s.TEXT_SECONDARY}; font-size: 11px; font-weight: bold;")
+        middle.addWidget(lbl_pnz)
+        middle.addWidget(self._pnz_table)
+        middle.addWidget(lbl_sd)
+        middle.addWidget(self._sd_table)
+        middle.addStretch()
+        stats_row.addLayout(middle, stretch=1)
 
-        for lbl in self.findChildren(QLabel):
-            lbl.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 11px; font-weight: bold;")
+        # Right: percentile distribution
+        pct_col = QVBoxLayout()
+        pct_col.setSpacing(8)
+        lbl_pct = QLabel("Percentile Distribution")
+        lbl_pct.setStyleSheet(f"color: {_s.TEXT_SECONDARY}; font-size: 11px; font-weight: bold;")
+        self._pct_table = _make_two_col_table(["Percentile", "Return"])
+        pct_col.addWidget(lbl_pct)
+        pct_col.addWidget(self._pct_table)
+        pct_col.addStretch()
+        stats_row.addLayout(pct_col, stretch=1)
 
-        stats_row.addLayout(right, stretch=1)
         root.addLayout(stats_row)
 
     # ------------------------------------------------------------------
@@ -180,37 +306,36 @@ class _DorPanel(QGroupBox):
         self._stats_table.setRowCount(len(stat_rows))
         for row, (name, val, fmt) in enumerate(stat_rows):
             name_item = QTableWidgetItem(name)
-            name_item.setForeground(QColor(TEXT_SECONDARY))
+            name_item.setForeground(QColor(_s.TEXT_SECONDARY))
             self._stats_table.setItem(row, 0, name_item)
-            val_str = fmt.format(val) if val is not None else "—"
+            val_str  = fmt.format(val) if val is not None else "—"
             val_item = QTableWidgetItem(val_str)
             val_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            val_item.setForeground(QColor(TEXT_PRIMARY))
+            val_item.setForeground(QColor(_s.TEXT_PRIMARY))
             self._stats_table.setItem(row, 1, val_item)
         _fit_table(self._stats_table)
 
         # Pos/Neg/Zero table
-        self._pnz_table.setRowCount(3)
         pnz_rows = [
-            ("Count",        "count",          "{:.0f}"),
-            ("Avg Return",   "avg_return",     "{:+.4f}"),
-            ("Freq %",       "freq_pct",       "{:.1%}"),
-            ("Freq-Adj Ret", "freq_adj_return","{:+.4f}"),
+            ("Count",        "count",           "{:.0f}"),
+            ("Avg Return",   "avg_return",      "{:+.4f}"),
+            ("Freq %",       "freq_pct",        "{:.1%}"),
+            ("Freq-Adj Ret", "freq_adj_return", "{:+.4f}"),
         ]
         self._pnz_table.setColumnCount(4)
         self._pnz_table.setHorizontalHeaderLabels(["", "Positive", "Negative", "Zero"])
         self._pnz_table.setRowCount(len(pnz_rows))
         for row, (label, key, fmt) in enumerate(pnz_rows):
             lbl_item = QTableWidgetItem(label)
-            lbl_item.setForeground(QColor(TEXT_SECONDARY))
+            lbl_item.setForeground(QColor(_s.TEXT_SECONDARY))
             self._pnz_table.setItem(row, 0, lbl_item)
             for col, bucket in enumerate(("positive", "negative", "zero"), start=1):
                 bdata = split.get(bucket, {})
-                raw = bdata.get(key)
-                text = fmt.format(raw) if raw is not None else "—"
-                item = QTableWidgetItem(text)
+                raw   = bdata.get(key)
+                text  = fmt.format(raw) if raw is not None else "—"
+                item  = QTableWidgetItem(text)
                 item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                color = GREEN if bucket == "positive" else (RED if bucket == "negative" else TEXT_SECONDARY)
+                color = _s.GREEN if bucket == "positive" else (_s.RED if bucket == "negative" else _s.TEXT_SECONDARY)
                 item.setForeground(QColor(color))
                 self._pnz_table.setItem(row, col, item)
         _fit_table(self._pnz_table)
@@ -226,11 +351,25 @@ class _DorPanel(QGroupBox):
             self._sd_table.setItem(row, 2, _pct_item(nrm, secondary=True))
         _fit_table(self._sd_table)
 
+        # Percentile table
+        pcts = dor_section.get("percentiles", [])
+        self._pct_table.setRowCount(len(pcts))
+        for row, p in enumerate(pcts):
+            level_item = _plain(f"{p['level']:.0%}")
+            self._pct_table.setItem(row, 0, level_item)
+            val      = p["value"]
+            val_item = QTableWidgetItem(f"{val:+.4f}")
+            val_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            val_item.setForeground(QColor(_s.GREEN if val > 0 else _s.RED))
+            self._pct_table.setItem(row, 1, val_item)
+        _fit_table(self._pct_table)
+
     def clear(self) -> None:
         self._histogram.clear()
         self._stats_table.setRowCount(0)
         self._pnz_table.setRowCount(0)
         self._sd_table.setRowCount(0)
+        self._pct_table.setRowCount(0)
 
 
 # ---------------------------------------------------------------------------
@@ -267,7 +406,7 @@ def _make_two_col_table(headers: list[str], cols: int = 2) -> QTableWidget:
 
 def _plain(text: str) -> QTableWidgetItem:
     item = QTableWidgetItem(text)
-    item.setForeground(QColor(TEXT_SECONDARY))
+    item.setForeground(QColor(_s.TEXT_SECONDARY))
     return item
 
 
@@ -275,5 +414,5 @@ def _pct_item(val: float | None, secondary: bool = False) -> QTableWidgetItem:
     text = f"{val:.1%}" if val is not None else "—"
     item = QTableWidgetItem(text)
     item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-    item.setForeground(QColor(TEXT_SECONDARY if secondary else TEXT_PRIMARY))
+    item.setForeground(QColor(_s.TEXT_SECONDARY if secondary else _s.TEXT_PRIMARY))
     return item
