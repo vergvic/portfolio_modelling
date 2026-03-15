@@ -94,6 +94,9 @@ THEMES: dict[str, dict] = {
 
 THEME_ORDER: list[str] = ["Amber", "Phosphor", "DOS", "Modern"]
 
+# "Custom" is populated at startup (load_custom_theme) and by the editor dialog.
+# It's only added to THEME_ORDER once the user saves a custom theme.
+
 _current_name: str = "Amber"
 
 # ---------------------------------------------------------------------------
@@ -116,6 +119,77 @@ BORDER_RADIUS  = ""
 BORDER_WIDTH   = ""
 SCROLLBAR_W    = ""
 STYLESHEET     = ""
+
+
+# ---------------------------------------------------------------------------
+# Seed-colour derivation
+# ---------------------------------------------------------------------------
+
+def _parse(h: str) -> tuple[int, int, int]:
+    h = h.lstrip("#")
+    return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+
+
+def _rgb(r: int, g: int, b: int) -> str:
+    return f"#{r:02X}{g:02X}{b:02X}"
+
+
+def _add_lightness(h: str, n: int) -> str:
+    """Add n to every RGB channel (clamp at 255), preserving hue."""
+    r, g, b = _parse(h)
+    return _rgb(min(r + n, 255), min(g + n, 255), min(b + n, 255))
+
+
+def _blend(a: str, b: str, t: float) -> str:
+    """Linear blend: t=0 → a, t=1 → b."""
+    ar, ag, ab = _parse(a)
+    br, bg, bb = _parse(b)
+    return _rgb(
+        int(ar + (br - ar) * t),
+        int(ag + (bg - ag) * t),
+        int(ab + (bb - ab) * t),
+    )
+
+
+def derive_full_theme(
+    bg:     str,
+    text:   str,
+    accent: str,
+    green:  str,
+    red:    str,
+    orange: str,
+    font:   str  = '"Courier New", Consolas, monospace',
+    radius: str  = "0px",
+    bw:     str  = "2px",
+) -> dict:
+    """
+    Build a complete theme dict from 6 seed colours + 3 style choices.
+
+    bg     — deepest background colour (BG_MAIN)
+    text   — primary text / foreground colour
+    accent — signature colour used for borders, highlights, headers
+    green  — positive / gain colour
+    red    — negative / loss colour
+    orange — warning colour
+    """
+    return {
+        "BG_MAIN":        bg,
+        "BG_PANEL":       _add_lightness(bg, 10),
+        "BG_INPUT":       _add_lightness(bg, 20),
+        "BORDER":         accent,
+        "TEXT_PRIMARY":   text,
+        "TEXT_SECONDARY": _blend(text, bg, 0.50),
+        "TEXT_DISABLED":  _blend(text, bg, 0.75),
+        "NEUTRAL":        _blend(text, bg, 0.50),
+        "ACCENT":         accent,
+        "GREEN":          green,
+        "RED":            red,
+        "ORANGE":         orange,
+        "FONT_FAMILY":    font,
+        "BORDER_RADIUS":  radius,
+        "BORDER_WIDTH":   bw,
+        "SCROLLBAR_W":    "10px" if bw in ("2px", "3px") else "8px",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -279,7 +353,7 @@ QPushButton#RefreshButton:hover {{
     color: {pri};
     border-color: {acc};
 }}
-QPushButton#ThemeButton {{
+QPushButton#ThemeButton, QToolButton#ThemeButton {{
     background: transparent;
     color: {acc};
     border: {bw} solid {acc};
@@ -288,10 +362,11 @@ QPushButton#ThemeButton {{
     font-size: 11px;
     min-width: 0;
 }}
-QPushButton#ThemeButton:hover {{
+QPushButton#ThemeButton:hover, QToolButton#ThemeButton:hover {{
     background: {acc};
     color: {bg};
 }}
+QToolButton#ThemeButton::menu-indicator {{ width: 0; }}
 
 /* ── LineEdit / SpinBox ── */
 QLineEdit, QDoubleSpinBox, QSpinBox {{

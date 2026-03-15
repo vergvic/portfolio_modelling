@@ -15,7 +15,7 @@ from typing import Any
 import pandas as pd
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QTabWidget, QVBoxLayout,
-    QStatusBar, QLabel, QApplication, QPushButton,
+    QStatusBar, QLabel, QApplication, QToolButton, QMenu,
 )
 from PySide6.QtCore import Qt, QThread, Signal
 
@@ -32,6 +32,7 @@ from ui.tab_dor       import TabDoR
 from ui.widgets.ticker_input import TickerInputDialog
 import ui.styles as styles
 from ui.styles import ORANGE, TEXT_SECONDARY  # noqa: F401  (re-exported aliases)
+from ui.widgets.theme_editor import ThemeEditorDialog, load_custom_theme
 from config import APP_NAME, WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT, MARKET_PROXY
 
 log = logging.getLogger(__name__)
@@ -99,7 +100,9 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(APP_NAME)
         self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
-        self.setStyleSheet(styles.STYLESHEET)
+        # Stylesheet is applied at the QApplication level in main.py so that
+        # QApplication.setStyleSheet() calls made during theme switching are
+        # not shadowed by a widget-level override here.
 
         # In-memory state
         self._portfolio: list[dict] = []
@@ -138,12 +141,19 @@ class MainWindow(QMainWindow):
         self._tabs.addTab(self._tab_ticker,    "Ticker vs Rest")
         self._tabs.addTab(self._tab_dor,       "Distribution of Returns")
 
-        # Theme toggle button — placed in the top-right corner of the tab bar
-        self._theme_btn = QPushButton(f"THEME: {styles.current_theme_name()}")
+        # Theme dropdown — placed in the top-right corner of the tab bar
+        self._theme_btn = QToolButton()
         self._theme_btn.setObjectName("ThemeButton")
         self._theme_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self._theme_btn.clicked.connect(self._on_theme_cycle)
+        self._theme_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self._theme_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        self._theme_menu = QMenu(self._theme_btn)
+        self._theme_btn.setMenu(self._theme_menu)
+        self._refresh_theme_menu()
         self._tabs.setCornerWidget(self._theme_btn, Qt.Corner.TopRightCorner)
+
+        # Load any previously saved Custom theme on startup
+        self._load_saved_custom_theme()
 
         layout.addWidget(self._tabs)
 
@@ -368,16 +378,54 @@ class MainWindow(QMainWindow):
         self._tab_dor.refresh_display(self._portfolio, self._dor_data)
 
     # ------------------------------------------------------------------
-    # Theme cycling
+    # Theme management
     # ------------------------------------------------------------------
 
-    def _on_theme_cycle(self) -> None:
-        next_name = styles.next_theme_name()
-        new_ss    = styles.apply_theme(next_name)
+    def _refresh_theme_menu(self) -> None:
+        """Rebuild the theme dropdown to reflect current THEME_ORDER."""
+        self._theme_menu.clear()
+        current = styles.current_theme_name()
+
+        for name in styles.THEME_ORDER:
+            action = self._theme_menu.addAction(
+                f"✓  {name}" if name == current else f"    {name}"
+            )
+            action.triggered.connect(lambda checked=False, n=name: self._on_theme_select(n))
+
+        self._theme_menu.addSeparator()
+        edit_action = self._theme_menu.addAction("✎  Edit Custom Theme…")
+        edit_action.triggered.connect(self._on_edit_custom_theme)
+
+        self._theme_btn.setText(f"THEME: {current}  ▾")
+
+    def _on_theme_select(self, name: str) -> None:
+        new_ss = styles.apply_theme(name)
         QApplication.instance().setStyleSheet(new_ss)
-        self._theme_btn.setText(f"THEME: {next_name}")
-        # Re-render all tabs so matplotlib charts and per-cell colours update
+        self._refresh_theme_menu()
         self._update_all_tabs()
+
+    def _on_edit_custom_theme(self) -> None:
+        dlg = ThemeEditorDialog(self)
+        dlg.theme_applied.connect(self._on_custom_theme_applied)
+        dlg.exec()
+
+    def _on_custom_theme_applied(self) -> None:
+        """Called when user saves a new custom theme in the editor."""
+        new_ss = styles.apply_theme("Custom")
+        QApplication.instance().setStyleSheet(new_ss)
+        self._refresh_theme_menu()
+        self._update_all_tabs()
+
+    def _load_saved_custom_theme(self) -> None:
+        """On startup: if a custom_theme.json exists, register it (don't auto-apply)."""
+        import os
+        from ui.widgets.theme_editor import _CUSTOM_PATH
+        if os.path.exists(_CUSTOM_PATH):
+            theme = load_custom_theme()
+            styles.THEMES["Custom"] = theme
+            if "Custom" not in styles.THEME_ORDER:
+                styles.THEME_ORDER.append("Custom")
+            self._refresh_theme_menu()
 
     # ------------------------------------------------------------------
     # Status bar

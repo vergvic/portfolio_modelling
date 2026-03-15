@@ -61,6 +61,12 @@ def main() -> None:
         log.critical("Database initialisation failed: %s", exc)
         sys.exit(1)
 
+    # Apply stylesheet at the application level — this is the single source of
+    # truth for all Qt styling.  Widget-level setStyleSheet() calls override
+    # the app-level one, so main_window.py must NOT call self.setStyleSheet().
+    from ui.styles import STYLESHEET
+    app.setStyleSheet(STYLESHEET)
+
     window = MainWindow()
     window.show()
 
