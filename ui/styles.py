@@ -193,6 +193,53 @@ def derive_full_theme(
 
 
 # ---------------------------------------------------------------------------
+# QPalette builder — lets Fusion use our theme colours for all native drawing
+# (separator lines, focus rings, etc.) so they match the stylesheet exactly.
+# ---------------------------------------------------------------------------
+
+def build_palette():
+    """Return a QPalette whose Mid role = BORDER, so Fusion's native 1px
+    header/section separator lines are drawn in our theme border colour."""
+    from PySide6.QtGui import QPalette, QColor  # imported lazily to keep module lightweight
+
+    t = THEMES[_current_name]
+    bg    = QColor(t["BG_MAIN"])
+    panel = QColor(t["BG_PANEL"])
+    inp   = QColor(t["BG_INPUT"])
+    brd   = QColor(t["BORDER"])
+    pri   = QColor(t["TEXT_PRIMARY"])
+    sec   = QColor(t["TEXT_SECONDARY"])
+    acc   = QColor(t["ACCENT"])
+
+    pal = QPalette()
+    # Backgrounds
+    pal.setColor(QPalette.ColorRole.Window,         bg)
+    pal.setColor(QPalette.ColorRole.Base,           panel)
+    pal.setColor(QPalette.ColorRole.AlternateBase,  inp)
+    pal.setColor(QPalette.ColorRole.Button,         inp)
+    pal.setColor(QPalette.ColorRole.ToolTipBase,    inp)
+    # Text
+    pal.setColor(QPalette.ColorRole.WindowText,     pri)
+    pal.setColor(QPalette.ColorRole.Text,           pri)
+    pal.setColor(QPalette.ColorRole.BrightText,     pri)
+    pal.setColor(QPalette.ColorRole.ButtonText,     pri)
+    pal.setColor(QPalette.ColorRole.ToolTipText,    pri)
+    pal.setColor(QPalette.ColorRole.PlaceholderText, sec)
+    # Selection
+    pal.setColor(QPalette.ColorRole.Highlight,      acc)
+    pal.setColor(QPalette.ColorRole.HighlightedText, bg)
+    pal.setColor(QPalette.ColorRole.Link,           acc)
+    pal.setColor(QPalette.ColorRole.LinkVisited,    acc)
+    # Border / separator roles — Fusion uses Mid for its native 1px lines
+    pal.setColor(QPalette.ColorRole.Mid,            brd)
+    pal.setColor(QPalette.ColorRole.Midlight,       inp)
+    pal.setColor(QPalette.ColorRole.Dark,           brd)
+    pal.setColor(QPalette.ColorRole.Light,          inp)
+    pal.setColor(QPalette.ColorRole.Shadow,         bg)
+    return pal
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -377,8 +424,48 @@ QLineEdit, QDoubleSpinBox, QSpinBox {{
     color: {pri};
     selection-background-color: {acc};
 }}
-QLineEdit:focus, QDoubleSpinBox:focus {{
+QLineEdit:focus, QDoubleSpinBox:focus, QSpinBox:focus {{
     border-color: {acc};
+}}
+
+/* Spin-box buttons — flat, flush inside the border, no native chrome */
+QDoubleSpinBox::up-button, QSpinBox::up-button {{
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 18px;
+    border-left: {bw} solid {brd};
+    border-bottom: 1px solid {brd};
+    border-top: none;
+    border-right: none;
+    background: {inp};
+}}
+QDoubleSpinBox::down-button, QSpinBox::down-button {{
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 18px;
+    border-left: {bw} solid {brd};
+    border-top: none;
+    border-bottom: none;
+    border-right: none;
+    background: {inp};
+}}
+QDoubleSpinBox::up-button:hover, QSpinBox::up-button:hover,
+QDoubleSpinBox::down-button:hover, QSpinBox::down-button:hover {{
+    background: {brd};
+}}
+QDoubleSpinBox::up-arrow, QSpinBox::up-arrow {{
+    width: 7px; height: 7px;
+    image: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 5px solid {pri};
+}}
+QDoubleSpinBox::down-arrow, QSpinBox::down-arrow {{
+    width: 7px; height: 7px;
+    image: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid {pri};
 }}
 
 /* ── ComboBox ── */
@@ -402,16 +489,28 @@ QComboBox QAbstractItemView {{
     color: {pri};
 }}
 
-/* ── Tables ── */
+/* ── Tables ──
+   Border strategy — every line comes from exactly one source (no double-draw):
+   • Each item draws its OWN top + left border  → provides all interior
+     separators AND the top/left edges of the table (first row / first col).
+   • The table widget draws only border-right + border-bottom  → closes the
+     outer right and bottom edges without any overlap with item borders.
+   • showGrid is disabled (setShowGrid(False)) so Qt never draws its own
+     gridlines on top of these CSS borders.
+*/
 QTableWidget {{
     background: {panel};
-    gridline-color: {brd};
-    border: {bw} solid {brd};
-    border-radius: {br};
+    gridline-color: transparent;
+    border-top: none;
+    border-left: none;
+    border-right: 1px solid {brd};
+    border-bottom: 1px solid {brd};
     alternate-background-color: {inp};
 }}
 QTableWidget::item {{
     padding: 4px 8px;
+    border-top: 1px solid {brd};
+    border-left: 1px solid {brd};
 }}
 QTableWidget::item:selected {{
     background: {acc};
@@ -421,11 +520,24 @@ QHeaderView::section {{
     background: {inp};
     color: {acc};
     border: none;
-    border-right: 1px solid {brd};
-    border-bottom: {bw} solid {brd};
+    border-top: 1px solid {brd};
+    border-left: 1px solid {brd};
     padding: 5px 8px;
     font-weight: bold;
     font-size: 12px;
+}}
+QHeaderView {{
+    border: none;
+    background: {inp};
+}}
+/* Corner button (top-left cell where horizontal + vertical headers intersect).
+   QHeaderView::section does NOT cover this widget, so it must be styled
+   separately with the same border-top + border-left as all other sections. */
+QTableCornerButton::section {{
+    background: {inp};
+    border: none;
+    border-top: 1px solid {brd};
+    border-left: 1px solid {brd};
 }}
 
 /* ── ListWidget ── */

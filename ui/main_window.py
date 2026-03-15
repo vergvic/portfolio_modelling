@@ -403,7 +403,9 @@ class MainWindow(QMainWindow):
 
     def _on_theme_select(self, name: str) -> None:
         new_ss = styles.apply_theme(name)
-        QApplication.instance().setStyleSheet(new_ss)
+        app = QApplication.instance()
+        app.setStyleSheet(new_ss)
+        app.setPalette(styles.build_palette())
         save_active_theme(name)
         self._refresh_theme_menu()
         self._update_all_tabs()
@@ -416,7 +418,9 @@ class MainWindow(QMainWindow):
     def _on_custom_theme_applied(self) -> None:
         """Called when user saves a new custom theme in the editor."""
         new_ss = styles.apply_theme("Custom")
-        QApplication.instance().setStyleSheet(new_ss)
+        app = QApplication.instance()
+        app.setStyleSheet(new_ss)
+        app.setPalette(styles.build_palette())
         save_active_theme("Custom")
         self._refresh_theme_menu()
         self._update_all_tabs()

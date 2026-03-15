@@ -1,5 +1,5 @@
 {
-  "bg": "#080808",
+  "bg": "#000000",
   "text": "#FFFFFF",
   "accent": "#676767",
   "green": "#6BCF6B",
@@ -7,5 +7,5 @@
   "orange": "#FFD700",
   "font": "Consolas, monospace",
   "radius": "0px",
-  "bw": "2px"
+  "bw": "1px"
 }

@@ -145,6 +145,8 @@ class TabTicker(QWidget):
         )
         self._corr_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._corr_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._corr_table.setShowGrid(False)
+        _fit_table(self._corr_table)
         corr_layout.addWidget(self._corr_table)
 
         # ── Portfolio impact ──────────────────────────────────────────
@@ -169,6 +171,7 @@ class TabTicker(QWidget):
         )
         self._impact_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._impact_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._impact_table.setShowGrid(False)
         _fit_table(self._impact_table)
 
         impact_layout.addWidget(self._impact_table)

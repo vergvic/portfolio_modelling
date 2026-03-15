@@ -435,8 +435,22 @@ def _make_two_col_table(headers: list[str], cols: int = 2) -> QTableWidget:
     t.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
     t.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
     t.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-    # Tighter horizontal padding than the global stylesheet default
-    t.setStyleSheet("QTableWidget::item { padding: 2px 4px; }")
+    # Grid drawn entirely via CSS ::item borders; showGrid=False removes the
+    # Qt-native gridlines that otherwise double-up on right/bottom edges.
+    t.setShowGrid(False)
+    # Tighter horizontal padding; mirror the global border strategy exactly
+    # (item draws top+left, table widget closes right+bottom).
+    t.setStyleSheet(
+        "QTableWidget { border-top: none; border-left: none;"
+        " border-right: 1px solid palette(mid);"
+        " border-bottom: 1px solid palette(mid); }"
+        "QTableWidget::item { padding: 2px 4px;"
+        " border-top: 1px solid palette(mid);"
+        " border-left: 1px solid palette(mid); }"
+        "QHeaderView::section { border: none;"
+        " border-top: 1px solid palette(mid);"
+        " border-left: 1px solid palette(mid); }"
+    )
     return t
 
 

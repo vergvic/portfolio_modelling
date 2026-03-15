@@ -49,6 +49,13 @@ def main() -> None:
     app.setApplicationName(APP_NAME)
     app.setOrganizationName("PortfolioModeller")
 
+    # Force the Fusion style engine so Qt renders ALL borders purely from the
+    # stylesheet with no platform-specific 3D-relief decoration.  Without this,
+    # QWindowsVistaStyle draws lighter top/left and darker right/bottom borders
+    # regardless of the stylesheet, and also overrides spin-box button rendering.
+    from PySide6.QtWidgets import QStyleFactory
+    app.setStyle(QStyleFactory.create("Fusion"))
+
     # App icon (if present)
     icon_path = _ROOT / "assets" / "icon.ico"
     if icon_path.exists():
@@ -61,11 +68,12 @@ def main() -> None:
         log.critical("Database initialisation failed: %s", exc)
         sys.exit(1)
 
-    # Apply stylesheet at the application level — this is the single source of
-    # truth for all Qt styling.  Widget-level setStyleSheet() calls override
-    # the app-level one, so main_window.py must NOT call self.setStyleSheet().
-    from ui.styles import STYLESHEET
-    app.setStyleSheet(STYLESHEET)
+    # Apply stylesheet first, then palette.
+    # Qt's setStyleSheet() calls QStyle::polish() which can reset the palette,
+    # so setPalette() must come after to stick.
+    import ui.styles as _styles
+    app.setStyleSheet(_styles.STYLESHEET)
+    app.setPalette(_styles.build_palette())
 
     window = MainWindow()
     window.show()
