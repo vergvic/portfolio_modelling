@@ -71,6 +71,33 @@ def save_custom_seeds(seeds: dict) -> None:
         json.dump(seeds, fh, indent=2)
 
 
+# ---------------------------------------------------------------------------
+# Active-theme persistence (separate from custom seeds)
+# ---------------------------------------------------------------------------
+
+_ACTIVE_THEME_PATH = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "data", "active_theme.json")
+)
+
+
+def save_active_theme(name: str) -> None:
+    """Persist the currently selected theme name so it survives restarts."""
+    os.makedirs(os.path.dirname(_ACTIVE_THEME_PATH), exist_ok=True)
+    with open(_ACTIVE_THEME_PATH, "w", encoding="utf-8") as fh:
+        json.dump({"active": name}, fh)
+
+
+def load_active_theme() -> str | None:
+    """Return the last-saved theme name, or None if not set."""
+    if os.path.exists(_ACTIVE_THEME_PATH):
+        try:
+            with open(_ACTIVE_THEME_PATH, "r", encoding="utf-8") as fh:
+                return json.load(fh).get("active")
+        except Exception:
+            pass
+    return None
+
+
 def load_custom_theme() -> dict:
     """Build a full theme dict from the saved seeds (used at startup)."""
     seeds = load_custom_seeds()

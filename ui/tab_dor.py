@@ -64,11 +64,14 @@ class TabDoR(QWidget):
         self._stops_widget = _StopsTargetsWidget()
         content_layout.addWidget(self._stops_widget)
 
-        # Two panels
+        # C-C and H-L panels side by side
         self._cc_panel = _DorPanel("Close-to-Close Returns")
         self._hl_panel = _DorPanel("High-to-Low Returns")
-        content_layout.addWidget(self._cc_panel)
-        content_layout.addWidget(self._hl_panel)
+        panels_row = QHBoxLayout()
+        panels_row.setSpacing(12)
+        panels_row.addWidget(self._cc_panel, stretch=1)
+        panels_row.addWidget(self._hl_panel, stretch=1)
+        content_layout.addLayout(panels_row)
         content_layout.addStretch()
 
         scroll.setWidget(content)
@@ -232,7 +235,7 @@ class _DorPanel(QGroupBox):
 
         # Histogram
         self._histogram = HistogramWidget()
-        self._histogram.setMinimumHeight(280)
+        self._histogram.setMinimumHeight(240)
         root.addWidget(self._histogram)
 
         # Stats row — three panels side by side
@@ -241,14 +244,38 @@ class _DorPanel(QGroupBox):
 
         # Left: descriptive stats
         self._stats_table = _make_two_col_table(["Statistic", "Value"])
-        stats_row.addWidget(self._stats_table, stretch=1)
+        # Statistic label → shrink to content; Value → fill rest
+        self._stats_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self._stats_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeMode.Stretch
+        )
+        stats_row.addWidget(self._stats_table, stretch=3)
 
         # Middle: pos/neg/zero + SD bounds
         middle = QVBoxLayout()
         middle.setSpacing(8)
 
-        self._pnz_table = _make_two_col_table(["", "Positive", "Negative", "Zero"], cols=4)
-        self._sd_table  = _make_two_col_table(["Bound", "Actual %", "Normal %"], cols=3)
+        self._pnz_table = _make_two_col_table(["", "Pos", "Neg", "Zero"], cols=4)
+        # Row-label column → shrink to content; value columns → stretch equally
+        self._pnz_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.ResizeToContents
+        )
+        for c in (1, 2, 3):
+            self._pnz_table.horizontalHeader().setSectionResizeMode(
+                c, QHeaderView.ResizeMode.Stretch
+            )
+
+        self._sd_table = _make_two_col_table(["Bound", "Actual %", "Normal %"], cols=3)
+        # Bound column → shrink to content; percentage columns → stretch
+        self._sd_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.ResizeToContents
+        )
+        for c in (1, 2):
+            self._sd_table.horizontalHeader().setSectionResizeMode(
+                c, QHeaderView.ResizeMode.Stretch
+            )
         lbl_pnz = QLabel("Pos / Neg / Zero Split")
         lbl_pnz.setStyleSheet(f"color: {_s.TEXT_SECONDARY}; font-size: 11px; font-weight: bold;")
         lbl_sd = QLabel("SD Bounds vs Normal")
@@ -258,18 +285,25 @@ class _DorPanel(QGroupBox):
         middle.addWidget(lbl_sd)
         middle.addWidget(self._sd_table)
         middle.addStretch()
-        stats_row.addLayout(middle, stretch=1)
+        stats_row.addLayout(middle, stretch=4)
 
         # Right: percentile distribution
         pct_col = QVBoxLayout()
         pct_col.setSpacing(8)
         lbl_pct = QLabel("Percentile Distribution")
         lbl_pct.setStyleSheet(f"color: {_s.TEXT_SECONDARY}; font-size: 11px; font-weight: bold;")
-        self._pct_table = _make_two_col_table(["Percentile", "Return"])
+        self._pct_table = _make_two_col_table(["Pct", "Return"])
+        # Pct label → shrink; Return → fill
+        self._pct_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self._pct_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeMode.Stretch
+        )
         pct_col.addWidget(lbl_pct)
         pct_col.addWidget(self._pct_table)
         pct_col.addStretch()
-        stats_row.addLayout(pct_col, stretch=1)
+        stats_row.addLayout(pct_col, stretch=2)
 
         root.addLayout(stats_row)
 
@@ -317,13 +351,13 @@ class _DorPanel(QGroupBox):
 
         # Pos/Neg/Zero table
         pnz_rows = [
-            ("Count",        "count",           "{:.0f}"),
-            ("Avg Return",   "avg_return",      "{:+.4f}"),
-            ("Freq %",       "freq_pct",        "{:.1%}"),
-            ("Freq-Adj Ret", "freq_adj_return", "{:+.4f}"),
+            ("Count",    "count",           "{:.0f}"),
+            ("Avg Ret",  "avg_return",      "{:+.4f}"),
+            ("Freq %",   "freq_pct",        "{:.1%}"),
+            ("F-Adj Ret","freq_adj_return", "{:+.4f}"),
         ]
         self._pnz_table.setColumnCount(4)
-        self._pnz_table.setHorizontalHeaderLabels(["", "Positive", "Negative", "Zero"])
+        self._pnz_table.setHorizontalHeaderLabels(["", "Pos", "Neg", "Zero"])
         self._pnz_table.setRowCount(len(pnz_rows))
         for row, (label, key, fmt) in enumerate(pnz_rows):
             lbl_item = QTableWidgetItem(label)
@@ -346,7 +380,7 @@ class _DorPanel(QGroupBox):
             sig = bound.get("sigma")
             act = bound.get("actual_pct")
             nrm = bound.get("normal_pct")
-            self._sd_table.setItem(row, 0, _plain(f"{sig}σ  ({bound['lower']:.3f} – {bound['upper']:.3f})"))
+            self._sd_table.setItem(row, 0, _plain(f"{sig}σ"))
             self._sd_table.setItem(row, 1, _pct_item(act))
             self._sd_table.setItem(row, 2, _pct_item(nrm, secondary=True))
         _fit_table(self._sd_table)
@@ -401,6 +435,8 @@ def _make_two_col_table(headers: list[str], cols: int = 2) -> QTableWidget:
     t.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
     t.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
     t.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    # Tighter horizontal padding than the global stylesheet default
+    t.setStyleSheet("QTableWidget::item { padding: 2px 4px; }")
     return t
 
 

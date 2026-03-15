@@ -32,7 +32,10 @@ from ui.tab_dor       import TabDoR
 from ui.widgets.ticker_input import TickerInputDialog
 import ui.styles as styles
 from ui.styles import ORANGE, TEXT_SECONDARY  # noqa: F401  (re-exported aliases)
-from ui.widgets.theme_editor import ThemeEditorDialog, load_custom_theme
+from ui.widgets.theme_editor import (
+    ThemeEditorDialog, load_custom_theme,
+    save_active_theme, load_active_theme,
+)
 from config import APP_NAME, WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT, MARKET_PROXY
 
 log = logging.getLogger(__name__)
@@ -401,6 +404,7 @@ class MainWindow(QMainWindow):
     def _on_theme_select(self, name: str) -> None:
         new_ss = styles.apply_theme(name)
         QApplication.instance().setStyleSheet(new_ss)
+        save_active_theme(name)
         self._refresh_theme_menu()
         self._update_all_tabs()
 
@@ -413,19 +417,33 @@ class MainWindow(QMainWindow):
         """Called when user saves a new custom theme in the editor."""
         new_ss = styles.apply_theme("Custom")
         QApplication.instance().setStyleSheet(new_ss)
+        save_active_theme("Custom")
         self._refresh_theme_menu()
         self._update_all_tabs()
 
     def _load_saved_custom_theme(self) -> None:
-        """On startup: if a custom_theme.json exists, register it (don't auto-apply)."""
+        """
+        On startup:
+          1. If custom_theme.json exists, register the Custom theme slot.
+          2. If an active_theme.json exists, restore and apply that theme.
+        """
         import os
         from ui.widgets.theme_editor import _CUSTOM_PATH
+
+        # Register custom theme if previously saved
         if os.path.exists(_CUSTOM_PATH):
             theme = load_custom_theme()
             styles.THEMES["Custom"] = theme
             if "Custom" not in styles.THEME_ORDER:
                 styles.THEME_ORDER.append("Custom")
-            self._refresh_theme_menu()
+
+        # Restore last-used theme (preset or custom)
+        saved_name = load_active_theme()
+        if saved_name and saved_name in styles.THEMES:
+            new_ss = styles.apply_theme(saved_name)
+            QApplication.instance().setStyleSheet(new_ss)
+
+        self._refresh_theme_menu()
 
     # ------------------------------------------------------------------
     # Status bar

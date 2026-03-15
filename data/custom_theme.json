@@ -1,0 +1,11 @@
+{
+  "bg": "#080808",
+  "text": "#FFFFFF",
+  "accent": "#676767",
+  "green": "#6BCF6B",
+  "red": "#FF5555",
+  "orange": "#FFD700",
+  "font": "Consolas, monospace",
+  "radius": "0px",
+  "bw": "2px"
+}
